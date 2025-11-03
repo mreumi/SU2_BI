@@ -2157,6 +2157,8 @@ void CConfig::SetConfig_Options() {
   addStringOption("MESH_FILENAME", Mesh_FileName, string("mesh"));
   /*!\brief MESH_OUT_FILENAME \n DESCRIPTION: Mesh output file name. Used when converting, scaling, or deforming a mesh. \n DEFAULT: mesh_out \ingroup Config*/
   addStringOption("MESH_OUT_FILENAME", Mesh_Out_FileName, string("mesh_out"));
+  /* DESCRIPTION:  Mesh input file */
+  addStringOption("TARGET_XVEL_FILENAME", Targetdata_Filename, string("targetdata_xvel.dat"));
 
   /* DESCRIPTION: List of the number of grid points in the RECTANGLE or BOX grid in the x,y,z directions. (default: (33,33,33) ). */
   addShortListOption("MESH_BOX_SIZE", nMesh_Box_Size, Mesh_Box_Size);
@@ -3813,6 +3815,7 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
       switch(Kind_ObjFunc[iObj]) {
         case INVERSE_DESIGN_PRESSURE:
         case INVERSE_DESIGN_HEATFLUX:
+        case INVERSE_DESIGN_XVEL:
         case THRUST_COEFFICIENT:
         case TORQUE_COEFFICIENT:
         case FIGURE_OF_MERIT:
@@ -3831,7 +3834,7 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
           if (Kind_ObjFunc[iObj] != Obj_0) {
             SU2_MPI::Error("The following objectives can only be used for the first surface in a multi-objective \n"
                            "problem or as a single objective applied to multiple monitoring markers:\n"
-                           "INVERSE_DESIGN_PRESSURE, INVERSE_DESIGN_HEATFLUX, THRUST_COEFFICIENT, TORQUE_COEFFICIENT\n"
+                           "INVERSE_DESIGN_PRESSURE, INVERSE_DESIGN_HEATFLUX, INVERSE_DESIGN_XVEL, THRUST_COEFFICIENT, TORQUE_COEFFICIENT\n"
                            "FIGURE_OF_MERIT, SURFACE_TOTAL_PRESSURE, SURFACE_STATIC_PRESSURE, SURFACE_MASSFLOW\n"
                            "SURFACE_UNIFORMITY, SURFACE_SECONDARY, SURFACE_MOM_DISTORTION, SURFACE_SECOND_OVER_UNIFORM\n"
                            "SURFACE_PRESSURE_DROP, SURFACE_STATIC_TEMPERATURE, SURFACE_SPECIES_0\n"
@@ -6904,6 +6907,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           else {                         cout << "." << endl; }
           break;
         case INVERSE_DESIGN_PRESSURE:    cout << "Inverse design (Cp) objective function." << endl; break;
+        case INVERSE_DESIGN_XVEL:        cout << "Inverse design (X-Velocity) objective function." << endl; break;
         case INVERSE_DESIGN_HEATFLUX:    cout << "Inverse design (Heat Flux) objective function." << endl; break;
         case SIDEFORCE_COEFFICIENT:      cout << "Side force objective function." << endl; break;
         case EFFICIENCY:                 cout << "CL/CD objective function." << endl; break;
@@ -8602,6 +8606,7 @@ string CConfig::GetObjFunc_Extension(string val_filename) const {
         case SIDEFORCE_COEFFICIENT:       AdjExt = "_csf";      break;
         case INVERSE_DESIGN_PRESSURE:     AdjExt = "_invpress"; break;
         case INVERSE_DESIGN_HEATFLUX:     AdjExt = "_invheat";  break;
+        case INVERSE_DESIGN_XVEL:         AdjExt = "_invvelx";  break;
         case MOMENT_X_COEFFICIENT:        AdjExt = "_cmx";      break;
         case MOMENT_Y_COEFFICIENT:        AdjExt = "_cmy";      break;
         case MOMENT_Z_COEFFICIENT:        AdjExt = "_cmz";      break;

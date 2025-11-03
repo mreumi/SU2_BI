@@ -470,6 +470,10 @@ void CFlowCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
 
   SetCpInverseDesign(flow_solver, geometry, config);
 
+  /*--- Set x-velocity diff fields ---*/
+  
+  SetXVelInverseDesign(flow_solver, geometry, config);
+
   /*--- Set nearfield diff fields ---*/
 
   if (config->GetEquivArea()) SetNearfieldInverseDesign(flow_solver, geometry, config);

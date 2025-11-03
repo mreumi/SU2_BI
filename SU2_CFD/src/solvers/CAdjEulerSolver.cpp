@@ -767,6 +767,14 @@ void CAdjEulerSolver::SetForceProj_Vector(CGeometry *geometry, CSolver **solver_
             ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[0]/Area; ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[1]/Area;
             if (nDim == 3) ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[2]/Area;
             break;
+          case INVERSE_DESIGN_XVEL :
+            Cp = solver_container[FLOW_SOL]->GetCPressure(iMarker, iVertex);
+            CpTarget = solver_container[FLOW_SOL]->GetCPressureTarget(iMarker, iVertex);
+            Area = sqrt(Normal[0]*Normal[0] + Normal[1]*Normal[1]);
+            if (nDim == 3) Area = sqrt(Normal[0]*Normal[0] + Normal[1]*Normal[1] + Normal[2]*Normal[2]);
+            ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[0]/Area; ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[1]/Area;
+            if (nDim == 3) ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[2]/Area;
+            break;
           case MOMENT_X_COEFFICIENT :
             if (nDim == 2) { SU2_MPI::Error("This functional is not possible in 2D!!", CURRENT_FUNCTION);}
             if (nDim == 3) {

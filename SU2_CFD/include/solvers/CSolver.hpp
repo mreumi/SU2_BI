@@ -2324,7 +2324,13 @@ public:
 
   /*!
    * \brief A virtual member.
-   * \param[in] val_pressure - Value of the difference between heat and the target heat.
+   * \param[in] val_xvel - Value of the difference between pressure and the target pressure.
+   */
+  inline virtual void SetTotal_XVelDiff(su2double val_xvel) { }
+
+  /*!
+   * \brief A virtual member.
+   * \param[in] val_heat - Value of the difference between heat and the target heat.
    */
   inline virtual void SetTotal_HeatFluxDiff(su2double val_heat) { }
 
@@ -2770,6 +2776,25 @@ public:
   inline virtual void SetCPressureTarget(unsigned short val_marker,
                                          unsigned long val_vertex,
                                          su2double val_pressure) { }
+
+  /*!
+   * \brief A virtual member.
+   * \param[in] val_marker - Surface marker where the coefficient is computed.
+   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \return Value of the pressure coefficient.
+   */
+  inline virtual su2double GetXVelTarget(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
+
+
+    /*!
+   * \brief A virtual member.
+   * \param[in] val_marker - Surface marker where the coefficient is computed.
+   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \return Value of the pressure coefficient.
+   */
+  inline virtual void SetXVelTarget(unsigned short val_marker,
+                                    unsigned long val_vertex,
+                                    su2double val_xvel) { }
 
   /*!
    * \brief A virtual member.

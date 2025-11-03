@@ -230,6 +230,8 @@ private:
   su2double Inlet_Matching_Tol; /*!< \brief Tolerance used when matching a point to a point from the inlet file. */
   string ActDisk_FileName;      /*!< \brief Filename specifying an actuator disk. */
 
+  string Targetdata_Filename;    /*!< \brief Filename specifying an target data file. */
+
   string *Marker_Euler,           /*!< \brief Euler wall markers. */
   *Marker_FarField,               /*!< \brief Far field markers. */
   *Marker_Custom,
@@ -5743,6 +5745,8 @@ public:
    */
   string GetVolume_FileName(void) const { return Volume_FileName; }
 
+  string GetTargetfilename(void) const { return Targetdata_Filename; }
+  
   /*!
    * \brief Add any numbers necessary to the filename (iteration number, zone ID ...)
    * \param[in] filename - the base filename.
@@ -5759,6 +5763,7 @@ public:
    * \param[in] outer_iter - the outer iterations
    * \return The new filename
    */
+   
   string GetFilename_Iter(const string& filename_iter, unsigned long curInnerIter, unsigned long curOuterIter) const;
 
   /*!

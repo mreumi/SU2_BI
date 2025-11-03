@@ -128,6 +128,7 @@ void CFVMFlowSolverBase<V, R>::Allocate(const CConfig& config) {
 
   AllocVectorOfVectors(nVertex, CPressure);
   AllocVectorOfVectors(nVertex, CPressureTarget);
+  AllocVectorOfVectors(nVertex, XVelTarget);
 
   /*--- Non dimensional aerodynamic coefficients ---*/
 
@@ -2924,6 +2925,9 @@ su2double CFVMFlowSolverBase<V,R>::EvaluateCommonObjFunc(const CConfig& config) 
       break;
     case INVERSE_DESIGN_HEATFLUX:
       objFun += weight * Total_HeatFluxDiff;
+      break;
+    case INVERSE_DESIGN_XVEL:
+      objFun += weight * Total_XVelDiff;
       break;
     case EQUIVALENT_AREA:
       objFun += weight*Total_CEquivArea;

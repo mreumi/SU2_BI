@@ -1831,11 +1831,13 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
   const auto surfCp_filename = config->GetUnsteady_FileName("TargetCp", curTimeIter, ".dat");
 
   /*--- Read the surface pressure file, on the first inner iteration. ---*/
+  std::cout<<"Reading target Cp file: "<<surfCp_filename<<std::endl;
 
   ifstream Surface_file;
   Surface_file.open(surfCp_filename);
 
   if (!Surface_file.good()) {
+    std::cout<<"File not found, skipping Cp difference calculation."<<std::endl;
     solver->SetTotal_CpDiff(0.0);
     SetHistoryOutputValue("INVERSE_DESIGN_PRESSURE", 0.0);
     return;
@@ -1868,6 +1870,7 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
           const auto iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
 
           if (iVertex >= 0) {
+            std::cout<<"Setting CP target at marker "<<iMarker<<" vertex "<<iVertex<<" to "<<PressureCoeff<<std::endl;
             solver->SetCPressureTarget(iMarker, iVertex, PressureCoeff);
             set = true;
           }
@@ -1909,7 +1912,97 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
 
   solver->SetTotal_CpDiff(PressDiff);
   SetHistoryOutputValue("INVERSE_DESIGN_PRESSURE", PressDiff);
+  std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
+}
 
+void CFlowOutput::SetXVelInverseDesign(CSolver *solver, const CGeometry *geometry, const CConfig *config){
+
+  /*--- Prepare to read the surface pressure files (CSV) ---*/
+
+  const auto surfXVel_filename = config->GetTargetfilename();
+
+  /*--- Read the surface pressure file, on the first inner iteration. ---*/
+  ifstream Surface_file;
+  Surface_file.open(surfXVel_filename);
+
+  if (!Surface_file.good()) {
+    std::cout<<"File not found, skipping X Vel difference calculation."<<std::endl;
+    solver->SetTotal_XVelDiff(0.0);
+    SetHistoryOutputValue("INVERSE_DESIGN_XVEL", 0.0);
+    return;
+  }
+
+  if ((config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint()) {
+    std::cout<<"Reading target X Vel. file: "<<surfXVel_filename<<std::endl;
+    string text_line;
+    getline(Surface_file, text_line);
+
+    while (getline(Surface_file, text_line)) {
+      /*--- remove commas ---*/
+      for (auto& c : text_line) if (c == ',') c = ' ';
+      stringstream point_line(text_line);
+
+      /*--- parse line ---*/
+      unsigned long iPointGlobal;
+      su2double XCoord, YCoord, ZCoord=0, Pressure, XVelocity;
+
+      point_line >> iPointGlobal >> XCoord >> YCoord;
+      if (nDim == 3) point_line >> ZCoord;
+      point_line >> Pressure >> XVelocity;
+
+      const auto iPoint = geometry->GetGlobal_to_Local_Point(iPointGlobal);
+
+      /*--- If the point is on this rank set the Cp to associated vertices
+       *    (one point may be shared by multiple vertices). ---*/
+      if (iPoint >= 0) {
+        bool set = false;
+        for (auto iMarker = 0u; iMarker < geometry->GetnMarker(); ++iMarker) {
+          const auto iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
+
+          if (iVertex >= 0) {
+            std::cout<<"Setting XVel target at marker "<<iMarker<<" vertex "<<iVertex<<" to "<<XVelocity<<std::endl;
+            solver->SetXVelTarget(iMarker, iVertex, XVelocity);
+            set = true;
+          }
+        }
+        if (!set)
+          cout << "WARNING: In file " << surfXVel_filename << ", point " << iPointGlobal << " is not a vertex." << endl;
+      }
+    }
+  }
+
+  /*--- Compute the pressure difference. ---*/
+
+  su2double PressDiff = 0.0;
+
+  for (auto iMarker = 0u; iMarker < geometry->GetnMarker(); ++iMarker) {
+
+    const auto Boundary = config->GetMarker_All_KindBC(iMarker);
+
+    if (config->GetSolid_Wall(iMarker) || (Boundary == NEARFIELD_BOUNDARY)) {
+      for (auto iVertex = 0ul; iVertex < geometry->GetnVertex(iMarker); iVertex++) {
+
+        const auto iPoint = geometry->vertex[iMarker][iVertex]->GetNode();
+        if (!geometry->nodes->GetDomain(iPoint)) continue;
+
+        const auto Cp = solver->GetCPressure(iMarker, iVertex);
+        const auto CpTarget = solver->GetCPressureTarget(iMarker, iVertex);
+
+        const auto Normal = geometry->vertex[iMarker][iVertex]->GetNormal();
+        const auto Area = GeometryToolbox::Norm(nDim, Normal);
+
+        PressDiff += Area * pow(CpTarget-Cp, 2);
+      }
+    }
+  }
+  su2double tmp = PressDiff;
+  SU2_MPI::Allreduce(&tmp, &PressDiff, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+
+  /*--- Update the total Cp difference coeffient. ---*/
+
+  solver->SetTotal_CpDiff(PressDiff);
+  SetHistoryOutputValue("INVERSE_DESIGN_PRESSURE", PressDiff);
+  std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
 }
 
 void CFlowOutput::AddNearfieldInverseDesignOutput(){

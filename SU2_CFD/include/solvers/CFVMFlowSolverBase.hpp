@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <iostream>
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "CSolver.hpp"
@@ -151,6 +152,8 @@ class CFVMFlowSolverBase : public CSolver {
   su2double AeroCoeffForceRef = 1.0;    /*!< \brief Reference force for aerodynamic coefficients. */
   su2double DynamicPressureRef = 1.0;   /*!< \brief Reference dynamic pressure. */
 
+  su2double Total_XVelDiff = 0.0;         /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
+
   su2double Total_CpDiff = 0.0;         /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
   su2double Total_HeatFluxDiff = 0.0;   /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
   su2double Total_CEquivArea = 0.0;     /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
@@ -178,9 +181,12 @@ class CFVMFlowSolverBase : public CSolver {
   vector<su2activematrix> HeatConjugateVar;     /*!< \brief CHT variables for each boundary and vertex. */
   vector<vector<su2double> > CPressure;         /*!< \brief Pressure coefficient for each boundary and vertex. */
   vector<vector<su2double> > CPressureTarget;   /*!< \brief Target Pressure coefficient for each boundary and vertex. */
+
+  vector<vector<su2double> > XVelTarget;        /*!< \brief Target X velocity for each boundary and vertex. */
+
   vector<vector<su2double> > YPlus;             /*!< \brief Yplus for each boundary and vertex. */
-  vector<vector<su2double> > UTau;                 /*!< \brief UTau for each boundary and vertex. */
-  vector<vector<su2double> > EddyViscWall;         /*!< \brief Eddy viscosuty at the wall for each boundary and vertex. */
+  vector<vector<su2double> > UTau;              /*!< \brief UTau for each boundary and vertex. */
+  vector<vector<su2double> > EddyViscWall;      /*!< \brief Eddy viscosuty at the wall for each boundary and vertex. */
 
   bool space_centered;       /*!< \brief True if space centered scheme used. */
   bool euler_implicit;       /*!< \brief True if euler implicit scheme used. */
@@ -2001,9 +2007,15 @@ class CFVMFlowSolverBase : public CSolver {
 
   /*!
    * \brief Set the value of the Equivalent Area coefficient.
-   * \param[in] val_cequivarea - Value of the Equivalent Area coefficient.
+   * \param[in] val_pressure - Value of the Equivalent Area coefficient.
    */
   inline void SetTotal_CpDiff(su2double val_pressure) final { Total_CpDiff = val_pressure; }
+
+  /*!
+   * \brief Set the value of the Equivalent Area coefficient.
+   * \param[in] val_XVel - Value of the Equivalent Area coefficient.
+   */
+  inline void SetTotal_XVelDiff(su2double val_XVel) final { Total_XVelDiff = val_XVel; }
 
   /*!
    * \brief Set the value of the Equivalent Area coefficient.
@@ -2094,6 +2106,27 @@ class CFVMFlowSolverBase : public CSolver {
   inline void SetCPressureTarget(unsigned short val_marker, unsigned long val_vertex, su2double val_pressure) final {
     CPressureTarget[val_marker][val_vertex] = val_pressure;
   }
+
+    /*!
+   * \brief Provide the Target Pressure coefficient.
+   * \param[in] val_marker - Surface marker where the coefficient is computed.
+   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \return Value of the pressure coefficient.
+   */
+  inline su2double GetXVelTarget(unsigned short val_marker, unsigned long val_vertex) const final {
+    return XVelTarget[val_marker][val_vertex];
+  }
+
+  /*!
+   * \brief Set the value of the target Pressure coefficient.
+   * \param[in] val_marker - Surface marker where the coefficient is computed.
+   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \return Value of the pressure coefficient.
+   */
+  inline void SetXVelTarget(unsigned short val_marker, unsigned long val_vertex, su2double val_xvel) final {
+    XVelTarget[val_marker][val_vertex] = val_xvel;
+  }
+
 
   /*!
    * \brief Value of the characteristic variables at the boundaries.
