@@ -211,6 +211,13 @@ protected:
    * \brief Add CP inverse design output as history fields
    */
   void AddCpInverseDesignOutput();
+
+
+  /*!
+   * \brief Add XVel inverse design output as history fields
+   */
+  void AddXVelInverseDesignOutput();
+  
   /*!
    * \brief Set X-velocity inverse design output field values (and also into the solver).
    * \param[in,out] solver - The container holding all solution data.

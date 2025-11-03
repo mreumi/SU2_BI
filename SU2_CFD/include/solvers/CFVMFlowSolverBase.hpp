@@ -182,6 +182,7 @@ class CFVMFlowSolverBase : public CSolver {
   vector<vector<su2double> > CPressure;         /*!< \brief Pressure coefficient for each boundary and vertex. */
   vector<vector<su2double> > CPressureTarget;   /*!< \brief Target Pressure coefficient for each boundary and vertex. */
 
+  vector<vector<su2double> > XVel;         /*!< \brief Pressure coefficient for each boundary and vertex. */
   vector<vector<su2double> > XVelTarget;        /*!< \brief Target X velocity for each boundary and vertex. */
 
   vector<vector<su2double> > YPlus;             /*!< \brief Yplus for each boundary and vertex. */
@@ -2105,6 +2106,16 @@ class CFVMFlowSolverBase : public CSolver {
    */
   inline void SetCPressureTarget(unsigned short val_marker, unsigned long val_vertex, su2double val_pressure) final {
     CPressureTarget[val_marker][val_vertex] = val_pressure;
+  }
+
+    /*!
+   * \brief Provide the Pressure coefficient.
+   * \param[in] val_marker - Surface marker where the coefficient is computed.
+   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \return Value of the pressure coefficient.
+   */
+  inline su2double GetXVel(unsigned short val_marker, unsigned long val_vertex) const final {
+    return XVel[val_marker][val_vertex];
   }
 
     /*!

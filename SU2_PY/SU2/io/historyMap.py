@@ -681,6 +681,12 @@ history_header_map = {
         "HEADER": "Cp_Diff",
         "TYPE": "COEFFICIENT",
     },
+    "INVERSE_DESIGN_XVEL": {
+        "DESCRIPTION": "X velocity difference for inverse design",
+        "GROUP": "XVEL_DIFF",
+        "HEADER": "XVel_Diff",
+        "TYPE": "COEFFICIENT",
+    },
     "LIFT": {
         "DESCRIPTION": "Total lift coefficient on all surfaces set with "
         "MARKER_MONITORING",

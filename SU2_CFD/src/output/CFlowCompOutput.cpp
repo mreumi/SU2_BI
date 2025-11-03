@@ -204,6 +204,8 @@ void CFlowCompOutput::SetHistoryOutputFields(CConfig *config){
 
   AddCpInverseDesignOutput();
 
+  AddXVelInverseDesignOutput();
+
   AddNearfieldInverseDesignOutput();
 
   if (config->GetBoolTurbomachinery()) AddTurboOutput(config->GetnZone());
@@ -471,7 +473,7 @@ void CFlowCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
   SetCpInverseDesign(flow_solver, geometry, config);
 
   /*--- Set x-velocity diff fields ---*/
-  
+
   SetXVelInverseDesign(flow_solver, geometry, config);
 
   /*--- Set nearfield diff fields ---*/

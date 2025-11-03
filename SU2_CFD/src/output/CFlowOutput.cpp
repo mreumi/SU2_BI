@@ -1915,6 +1915,11 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
   std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
 }
 
+void CFlowOutput::AddXVelInverseDesignOutput(){
+
+  AddHistoryOutput("INVERSE_DESIGN_XVEL", "XVel_Diff", ScreenOutputFormat::FIXED, "XVEL_DIFF", "X velocity difference for inverse design", HistoryFieldType::COEFFICIENT);
+}
+
 void CFlowOutput::SetXVelInverseDesign(CSolver *solver, const CGeometry *geometry, const CConfig *config){
 
   /*--- Prepare to read the surface pressure files (CSV) ---*/
@@ -1971,9 +1976,9 @@ void CFlowOutput::SetXVelInverseDesign(CSolver *solver, const CGeometry *geometr
     }
   }
 
-  /*--- Compute the pressure difference. ---*/
+  /*--- Compute the velocity difference. ---*/
 
-  su2double PressDiff = 0.0;
+  su2double VelDiff = 0.0;
 
   for (auto iMarker = 0u; iMarker < geometry->GetnMarker(); ++iMarker) {
 
@@ -1985,24 +1990,24 @@ void CFlowOutput::SetXVelInverseDesign(CSolver *solver, const CGeometry *geometr
         const auto iPoint = geometry->vertex[iMarker][iVertex]->GetNode();
         if (!geometry->nodes->GetDomain(iPoint)) continue;
 
-        const auto Cp = solver->GetCPressure(iMarker, iVertex);
-        const auto CpTarget = solver->GetCPressureTarget(iMarker, iVertex);
+        const auto XVel = solver->GetXVel(iMarker, iVertex);
+        const auto XVelTarget = solver->GetXVelTarget(iMarker, iVertex);
 
         const auto Normal = geometry->vertex[iMarker][iVertex]->GetNormal();
         const auto Area = GeometryToolbox::Norm(nDim, Normal);
 
-        PressDiff += Area * pow(CpTarget-Cp, 2);
+        VelDiff += Area * pow(XVelTarget-XVel, 2);
       }
     }
   }
-  su2double tmp = PressDiff;
-  SU2_MPI::Allreduce(&tmp, &PressDiff, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  su2double tmp = VelDiff;
+  SU2_MPI::Allreduce(&tmp, &VelDiff, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
 
-  /*--- Update the total Cp difference coeffient. ---*/
+  /*--- Update the total X velocity difference coeffient. ---*/
 
-  solver->SetTotal_CpDiff(PressDiff);
-  SetHistoryOutputValue("INVERSE_DESIGN_PRESSURE", PressDiff);
-  std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
+  solver->SetTotal_XVelDiff(VelDiff);
+  SetHistoryOutputValue("INVERSE_DESIGN_XVEL", VelDiff);
+  std::cout<<"   XVel Difference = "<<VelDiff<<std::endl;
 }
 
 void CFlowOutput::AddNearfieldInverseDesignOutput(){

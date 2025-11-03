@@ -128,6 +128,7 @@ void CFVMFlowSolverBase<V, R>::Allocate(const CConfig& config) {
 
   AllocVectorOfVectors(nVertex, CPressure);
   AllocVectorOfVectors(nVertex, CPressureTarget);
+  AllocVectorOfVectors(nVertex, XVel);
   AllocVectorOfVectors(nVertex, XVelTarget);
 
   /*--- Non dimensional aerodynamic coefficients ---*/
