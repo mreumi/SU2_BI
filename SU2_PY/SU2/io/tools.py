@@ -488,7 +488,7 @@ def get_adjointSuffix(objective_function=None):
         "EFFICIENCY": "eff",
         "INVERSE_DESIGN_PRESSURE": "invpress",
         "INVERSE_DESIGN_HEAT": "invheat",
-        "INVERSE_DESIGN_XVEL": "invxvel",
+        "INVERSE_DESIGN": "invxvel",
         "MAXIMUM_HEATFLUX": "maxheat",
         "TOTAL_HEATFLUX": "totheat",
         "EQUIVALENT_AREA": "ea",

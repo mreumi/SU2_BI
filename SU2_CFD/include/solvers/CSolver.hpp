@@ -2324,9 +2324,9 @@ public:
 
   /*!
    * \brief A virtual member.
-   * \param[in] val_xvel - Value of the difference between pressure and the target pressure.
+   * \param[in] val_discrepancy - Value of the difference between pressure and the target pressure.
    */
-  inline virtual void SetTotal_XVelDiff(su2double val_xvel) { }
+  inline virtual void SetTotal_ModelDiscrepancy(su2double val_discrepancy) { }
 
   /*!
    * \brief A virtual member.
@@ -2783,7 +2783,7 @@ public:
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline virtual su2double GetXVel(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
+  inline virtual su2double GetModelPrediction(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
 
   /*!
    * \brief A virtual member.
@@ -2791,7 +2791,7 @@ public:
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline virtual su2double GetXVelTarget(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
+  inline virtual su2double GetModelPredictionTarget(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
 
 
     /*!
@@ -2800,9 +2800,9 @@ public:
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline virtual void SetXVelTarget(unsigned short val_marker,
+  inline virtual void SetModelPredictionTarget(unsigned short val_marker,
                                     unsigned long val_vertex,
-                                    su2double val_xvel) { }
+                                    su2double val_discrepancy) { }
 
   /*!
    * \brief A virtual member.

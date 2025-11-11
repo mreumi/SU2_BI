@@ -204,7 +204,7 @@ void CFlowCompOutput::SetHistoryOutputFields(CConfig *config){
 
   AddCpInverseDesignOutput();
 
-  AddXVelInverseDesignOutput();
+  AddInverseDesignOutput();
 
   AddNearfieldInverseDesignOutput();
 
@@ -474,7 +474,7 @@ void CFlowCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
 
   /*--- Set x-velocity diff fields ---*/
 
-  SetXVelInverseDesign(flow_solver, geometry, config);
+  SetInverseDesign(flow_solver, geometry, config);
 
   /*--- Set nearfield diff fields ---*/
 

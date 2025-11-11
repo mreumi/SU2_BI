@@ -681,10 +681,10 @@ history_header_map = {
         "HEADER": "Cp_Diff",
         "TYPE": "COEFFICIENT",
     },
-    "INVERSE_DESIGN_XVEL": {
-        "DESCRIPTION": "X velocity difference for inverse design",
-        "GROUP": "XVEL_DIFF",
-        "HEADER": "XVel_Diff",
+    "INVERSE_DESIGN": {
+        "DESCRIPTION": "Model discrepancy for inverse design",
+        "GROUP": "MODEL_DISCREPANCY",
+        "HEADER": "MODEL_DISCREPANCY",
         "TYPE": "COEFFICIENT",
     },
     "LIFT": {

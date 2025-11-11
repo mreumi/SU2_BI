@@ -114,6 +114,7 @@ private:
   EquivArea,                /*!< \brief Flag to know if the code is going to compute and plot the equivalent area. */
   Engine,                   /*!< \brief Flag to know if the code is going to compute a problem with engine. */
   InvDesign_Cp,             /*!< \brief Flag to know if the code is going to compute and plot the inverse design. */
+  InvDesign,                /*!< \brief Flag to know if the code is going to compute and plot the inverse design. */
   InvDesign_HeatFlux,       /*!< \brief Flag to know if the code is going to compute and plot the inverse design. */
   Wind_Gust,                /*!< \brief Flag to know if there is a wind gust. */
   Turb_Fixed_Values,        /*!< \brief Flag to know if there are fixed values for turbulence quantities in one half-plane. */
@@ -5539,6 +5540,13 @@ public:
    * \return <code>TRUE</code> or <code>FALSE</code>  depending if we are computing the equivalent area.
    */
   bool GetEquivArea(void) const { return EquivArea; }
+
+   /*!
+   * \brief Information about computing and plotting the equivalent area distribution.
+   * \return <code>TRUE</code> or <code>FALSE</code>  depending if we are computing the equivalent area.
+   */
+  bool GetInvDesign(void) const { return InvDesign; }
+
 
   /*!
    * \brief Information about computing and plotting the equivalent area distribution.

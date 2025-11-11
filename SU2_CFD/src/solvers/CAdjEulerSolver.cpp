@@ -27,6 +27,7 @@
 
 
 #include "../../include/solvers/CAdjEulerSolver.hpp"
+#include <iostream>
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 
 CAdjEulerSolver::CAdjEulerSolver() : CSolver() {
@@ -655,7 +656,7 @@ void CAdjEulerSolver::Set_MPI_ActDisk(CSolver **solver_container, CGeometry *geo
 
 void CAdjEulerSolver::SetForceProj_Vector(CGeometry *geometry, CSolver **solver_container, CConfig *config) {
 
-  su2double *ForceProj_Vector, x = 0.0, y = 0.0, z = 0.0, *Normal, CD, CL, Cp, CpTarget, XVel, XVelTarget,
+  su2double *ForceProj_Vector, x = 0.0, y = 0.0, z = 0.0, *Normal, CD, CL, Cp, CpTarget, ModelPrediction, ModelPredictionTarget,
   CT, CQ, x_origin, y_origin, z_origin, WDrag, Area, invCD, CLCD2, invCQ, CTRCQ2;
   unsigned short iMarker,jMarker,iMarker_Monitoring, iDim;
   unsigned long iVertex, iPoint;
@@ -767,14 +768,20 @@ void CAdjEulerSolver::SetForceProj_Vector(CGeometry *geometry, CSolver **solver_
             ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[0]/Area; ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[1]/Area;
             if (nDim == 3) ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[2]/Area;
             break;
-          case INVERSE_DESIGN_XVEL :
-            XVel = solver_container[FLOW_SOL]->GetXVel(iMarker, iVertex);
-            XVelTarget = solver_container[FLOW_SOL]->GetXVelTarget(iMarker, iVertex);
+          case INVERSE_DESIGN :
+            // SEEMS TO BE UNUNED?
+            // ModelPrediction = solver_container[FLOW_SOL]->GetModelPrediction(iMarker, iVertex);
+            // should be something like: solver_container[FLOW_SOL]->GetNodes()->GetVelocity(iPoint, iDim)
+            ModelPrediction = solver_container[FLOW_SOL]->GetNodes()->GetVelocity(iMarker, 0);
+            std::cout << "+++++++++++++++++++ EULER ADJ SOLVER: ModelPrediction adj solver= " << ModelPrediction << std::endl;
+            ModelPredictionTarget = solver_container[FLOW_SOL]->GetModelPredictionTarget(iMarker, iVertex);
             Area = sqrt(Normal[0]*Normal[0] + Normal[1]*Normal[1]);
-            if (nDim == 3) Area = sqrt(Normal[0]*Normal[0] + Normal[1]*Normal[1] + Normal[2]*Normal[2]);
-            ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(XVel-XVelTarget)*Normal[0]/Area; 
-            ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(XVel-XVelTarget)*Normal[1]/Area;
-            if (nDim == 3) ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(XVel-XVelTarget)*Normal[2]/Area;
+            if (nDim == 3) 
+              Area = sqrt(Normal[0]*Normal[0] + Normal[1]*Normal[1] + Normal[2]*Normal[2]);
+              ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(ModelPrediction-ModelPredictionTarget)*Normal[0]/Area; 
+              ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(ModelPrediction-ModelPredictionTarget)*Normal[1]/Area;
+            if (nDim == 3) 
+              ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(ModelPrediction-ModelPredictionTarget)*Normal[2]/Area;
             break;
           case MOMENT_X_COEFFICIENT :
             if (nDim == 2) { SU2_MPI::Error("This functional is not possible in 2D!!", CURRENT_FUNCTION);}
