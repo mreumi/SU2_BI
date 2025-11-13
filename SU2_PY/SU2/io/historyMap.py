@@ -681,8 +681,8 @@ history_header_map = {
         "HEADER": "Cp_Diff",
         "TYPE": "COEFFICIENT",
     },
-    "INVERSE_DESIGN": {
-        "DESCRIPTION": "Model discrepancy for inverse design",
+    "INVERSE_PROBLEM": {
+        "DESCRIPTION": "Model discrepancy for inverse problem",
         "GROUP": "MODEL_DISCREPANCY",
         "HEADER": "MODEL_DISCREPANCY",
         "TYPE": "COEFFICIENT",

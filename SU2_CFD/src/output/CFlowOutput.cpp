@@ -30,6 +30,8 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <utility>
+#include <vector>
 
 #include "../../include/output/CFlowOutput.hpp"
 
@@ -39,6 +41,9 @@
 #include "../../include/variables/CPrimitiveIndices.hpp"
 #include "../../include/fluid/CCoolProp.hpp"
 
+//#include "../../include/output/CDatapoint.hpp"
+#include "../../include/output/CDatapointcloud.hpp"
+#include "../../include/output/CInterpolator.hpp"
 
 CFlowOutput::CFlowOutput(const CConfig *config, unsigned short nDim, bool fem_output) :
   CFVMOutput(config, nDim, fem_output),
@@ -1916,131 +1921,172 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
   std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
 }
 
-void CFlowOutput::AddInverseDesignOutput(){
-
-  AddHistoryOutput("INVERSE_DESIGN", "MODEL_DISCREPANCY", ScreenOutputFormat::FIXED, "MODEL_DISCREPANCY", "X velocity difference for inverse design", HistoryFieldType::COEFFICIENT);
-}
-
-void CFlowOutput::SetInverseDesign(CSolver *solver, const CGeometry *geometry, const CConfig *config){
-
-  /*--- Get the target file from the cfg ---*/
-  const auto target_filename = config->GetTargetfilename();
-
-  /*--- Create a variable for the target file, on the first inner iteration. ---*/
+std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>> readTargetData(const std::string& target_filename, int nDim) {
+  std::cout<<"Reading target file: "<<target_filename<<'\n';
+  
+  string text_line;
   ifstream Surface_file;
+
   Surface_file.open(target_filename);
 
+  // skip header line
+  getline(Surface_file, text_line);
+
+  std::vector<std::vector<su2double>> target_coordinates, target_values; // to keep track of points read from file
+  auto NaN = std::numeric_limits<su2double>::quiet_NaN(); // use to initialize target values which are not set
+
+  while (getline(Surface_file, text_line)) {
+    // parse line for each target point
+    std::vector<su2double> target_point_coords;
+    std::vector<su2double> target_point_vals;
+
+    /*--- remove commas ---*/
+    for (auto& c : text_line) if (c == ',') c = ' ';
+    stringstream point_line(text_line);
+
+    /*--- parse line ---*/
+    su2double XCoord, YCoord, ZCoord=0;
+    su2double TargetValueX = NaN, TargetValueY = NaN, TargetValueZ = NaN;
+
+    // lambda to read a double or set to NaN if not possible
+    auto readDoubleOrNaN = [&](std::istream& is, su2double& out) {
+        if (is >> out) return;
+
+        is.clear();
+        std::string tok;
+        if (!(is >> tok)) { out = NaN; return; }
+
+        std::string t = tok;
+        std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+        if (t == "nan") { out = NaN; return; }
+        throw std::runtime_error("Error reading target value from file: " + tok);
+    };
+
+    // read point coordinates
+    point_line >> XCoord >> YCoord;
+    if (nDim == 3) {
+      point_line >> ZCoord;
+      target_point_coords = {XCoord, YCoord, ZCoord};
+    } else {
+      target_point_coords = {XCoord, YCoord};
+    }
+
+    // read target values
+    readDoubleOrNaN(point_line, TargetValueX);
+    readDoubleOrNaN(point_line, TargetValueY);
+    if (nDim == 3) {
+      readDoubleOrNaN(point_line, TargetValueZ);
+      target_point_vals = {TargetValueX, TargetValueY, TargetValueZ};
+    } else {
+      target_point_vals = {TargetValueX, TargetValueY};
+    }
+
+    // append to lists of target coordinates and values
+    target_coordinates.push_back(target_point_coords);
+    target_values.push_back(target_point_vals);
+  }
+  Surface_file.close();
+  return {target_coordinates, target_values};
+  } 
+
+void CFlowOutput::AddInverseProblemOutput(){
+
+  AddHistoryOutput("INVERSE_PROBLEM", "MODEL_DISCREPANCY", ScreenOutputFormat::FIXED, "MODEL_DISCREPANCY", "Model discrepancy for inverse design", HistoryFieldType::COEFFICIENT);
+}
+
+void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, const CConfig *config){
+  
+  // Create a list of all points in the domain for interpolation
+  
+  // Get the local number of points on this processor
+  int localNumberofpoints   = geometry->GetnPointDomain();
+  int globalNumberofpoints  = 0;
+
+  std::vector<std::vector<su2double>> mesh_coordinates, predicted_values;
+
+  // Reserve memory for the vectors based on the number of points in the local process
+  mesh_coordinates.reserve(localNumberofpoints);  // reserve space for coordinates
+  predicted_values.reserve(localNumberofpoints);  // reserve space for predicted values (e.g., velocities)
+
+  // Populate the local points and associated values
+  for (int i = 0; i < localNumberofpoints; i++) {
+    std::vector<su2double> point_coords;
+    std::vector<su2double> predicted_vals;
+    if (nDim == 3) {
+      point_coords = {geometry->nodes->GetCoord(i, 0), geometry->nodes->GetCoord(i, 1), geometry->nodes->GetCoord(i, 2)};
+      predicted_vals = {solver->GetNodes()->GetVelocity(i, 0), solver->GetNodes()->GetVelocity(i, 1), solver->GetNodes()->GetVelocity(i, 2)};
+    } else {
+      point_coords = {geometry->nodes->GetCoord(i, 0), geometry->nodes->GetCoord(i, 1)};
+      predicted_vals = {solver->GetNodes()->GetVelocity(i, 0), solver->GetNodes()->GetVelocity(i, 1)};
+    }
+    mesh_coordinates.push_back(point_coords);
+    predicted_values.push_back(predicted_vals);
+  }
+  CDatapointcloud mesh_pointcloud(mesh_coordinates, predicted_values);
+
+  // Get the target file from the cfg
+  const auto target_filename = config->GetTargetfilename();
+  std::ifstream Surface_file;
+
+  // Check if the target file exists
   if (!Surface_file.good()) {
-    std::cout<<"File not found, skipping model discrepancy calculation."<<std::endl;
+    std::cout<<"File not found, skipping model discrepancy calculation."<<'\n';
     solver->SetTotal_ModelDiscrepancy(0.0);
-    SetHistoryOutputValue("INVERSE_DESIGN", 0.0);
+    SetHistoryOutputValue("INVERSE_PROBLEM", 0.0);
     return;
   }
-  
-  /*--- Read the target values from file and set to ModelPredictionTarget ---*/
+
+  // Read the target values from file and set to ModelPredictionTarget
   if ((config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint()) {
-    std::cout<<"Reading target file: "<<target_filename<<std::endl;
-    string text_line;
 
-    getline(Surface_file, text_line);
+    // Read target data from file and create datapointcloud of target points
+    auto [target_coordinates, target_values] = readTargetData(target_filename, nDim);
+    CDatapointcloud target_pointcloud(target_coordinates, target_values);
+    
+    // Create the interpolator
+    // TODO: Make the power and method configurable from the cfg
+    std::size_t k       = 3;
+    su2double power     = 2.0;
+    std::string method  = "IDW";
 
-    std::vector<int> list_of_points; // to keep track of points read from file
-    auto NaN = std::numeric_limits<su2double>::quiet_NaN(); // use to initialize target values not set
-
-    while (getline(Surface_file, text_line)) {
-      /*--- remove commas ---*/
-      for (auto& c : text_line) if (c == ',') c = ' ';
-      stringstream point_line(text_line);
-
-      /*--- parse line ---*/
-      unsigned long iPointGlobal;
-      su2double XCoord, YCoord, ZCoord=0;
-      su2double TargetValueX = NaN, TargetValueY = NaN, TargetValueZ = NaN;
-
-      // lambda to read a double or set to NaN if not possible
-      auto readDoubleOrNaN = [&](std::istream& is, su2double& out) {
-          if (is >> out) return;
-
-          is.clear();
-          std::string tok;
-          if (!(is >> tok)) { out = NaN; return; }
-
-          std::string t = tok;
-          std::transform(t.begin(), t.end(), t.begin(), ::tolower);
-          if (t == "nan") { out = NaN; return; }
-          throw std::runtime_error("Error reading target value from file: " + tok);
-      };
-
-      // read point data
-      point_line >> iPointGlobal >> XCoord >> YCoord;
-      if (nDim == 3) point_line >> ZCoord;
-      readDoubleOrNaN(point_line, TargetValueX);
-      readDoubleOrNaN(point_line, TargetValueY);
-      if (nDim == 3) readDoubleOrNaN(point_line, TargetValueZ);
-
-      std::cout<<"Read point "<<iPointGlobal<<" XCoord "<<XCoord<<" YCoord "<<YCoord<<" ZCoord "<<ZCoord<<" TargetValueX "<<TargetValueX<<" TargetValueY "<<TargetValueY<<" TargetValueZ "<<TargetValueZ<<std::endl;
-      list_of_points.push_back(iPointGlobal);
-
-      // INSERT INTERPOLATOR HERE
-      // Try to find the local point index that corresponds to the global point index from the target file
-      const auto iPoint = geometry->GetGlobal_to_Local_Point(iPointGlobal); // returns -1 if point not on this rank or not found
-
-      /*--- If the point is on this rank set the target velocity to associated vertices
-       *    (one point may be shared by multiple vertices). ---*/
-      if (iPoint >= 0) {
-        std::cout<<"iPointGlobal "<<iPointGlobal<<" iPoint "<<iPoint<<std::endl;
-        bool set = false;
-
-        // loop through all markers to find if the point is a vertex on any marker
-        for (auto iMarker = 0u; iMarker < geometry->GetnMarker(); ++iMarker) {
-          const auto iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
-
-          if (iVertex >= 0) {
-            std::cout<<"Setting XVel target at marker "<<iMarker<<" vertex "<<iVertex<<" to "<<TargetValueX<<std::endl;
-            solver->SetModelPredictionTarget(iMarker, iVertex, TargetValueX);
-            set = true;
-          }
-        }
-        if (!set)
-          cout << "WARNING: In file " << target_filename << ", point " << iPointGlobal << " is not a vertex." << endl;
-      }
-    }
-
-
-    /*--- Compute the velocity difference. ---*/
-    su2double VelDiff = 0.0;
+    Interpolator my_interpolator(k, power, method);
+    CDatapointcloud target_predictions = my_interpolator.interpolate(mesh_pointcloud, target_pointcloud);
+ 
+    // Compute the model discrepancy
+    su2double Model_discrepancy = 0.0;
     int n_points = 0;
-    for (auto iMarker = 0u; iMarker < geometry->GetnMarker(); ++iMarker) {
 
-      const auto Boundary = config->GetMarker_All_KindBC(iMarker);
+    for (std::size_t i = 0; i < target_coordinates.size(); ++i) {
+        const auto& target_point_coords = target_coordinates[i];
+        const auto& target_point_values = target_values[i];
+        const auto& predicted_vals      = target_predictions.points[i].values;
 
-      if (config->GetSolid_Wall(iMarker) || (Boundary == NEARFIELD_BOUNDARY)) {
-        for (auto iVertex = 0ul; iVertex < geometry->GetnVertex(iMarker); iVertex++) {
-
-          const auto iPoint = geometry->vertex[iMarker][iVertex]->GetNode();
-          if (!geometry->nodes->GetDomain(iPoint)) continue;
-
-          std::cout<<"iMarker "<<iMarker<<" iVertex "<<iVertex<<std::endl;
-          const auto XVel = solver->GetNodes()->GetVelocity(iVertex, 0); //solver->GetXVel(iMarker, iVertex);
-          std::cout<<"   XVel = "<<XVel<<std::endl;
-          const auto XVelTarget = solver->GetModelPredictionTarget(iMarker, iVertex);
-
-          const auto Normal = geometry->vertex[iMarker][iVertex]->GetNormal();
-          const auto Area = GeometryToolbox::Norm(nDim, Normal);
-
-          VelDiff += XVel;//Area * pow(XVelTarget-XVel, 2);
-          n_points += 1;
+        // Check if target value is set (not NaN)
+        if (!std::isnan(target_point_values[0])) { // X velocity target
+            su2double diff_x = predicted_vals[0] - target_point_values[0];
+            Model_discrepancy += diff_x * diff_x;
+            n_points++;
         }
-      }
+        if (!std::isnan(target_point_values[1])) { // Y velocity target
+            su2double diff_y = predicted_vals[1] - target_point_values[1];
+            Model_discrepancy += diff_y * diff_y;
+            n_points++;
+        }
+        if (nDim == 3 && !std::isnan(target_point_values[2])) { // Z velocity target
+            su2double diff_z = predicted_vals[2] - target_point_values[2];
+            Model_discrepancy += diff_z * diff_z;
+            n_points++;
+        }
     }
-    std::cout<<"+-+-+-+ Number of points used in XVel difference calculation on this rank: "<<n_points<<std::endl;
-    su2double tmp = VelDiff;
-    SU2_MPI::Allreduce(&tmp, &VelDiff, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+    std::cout<<"Considered number of target values on this rank: "<<n_points<<'\n';
 
-    /*--- Update the total X velocity difference coeffient. ---*/
-    solver->SetTotal_ModelDiscrepancy(VelDiff);
-    SetHistoryOutputValue("INVERSE_DESIGN", VelDiff);
-    std::cout<<"   XVel Difference = "<<VelDiff<<std::endl;
+    su2double tmp = Model_discrepancy;
+    SU2_MPI::Allreduce(&tmp, &Model_discrepancy, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+
+    // Update the total model discrepancy
+    solver->SetTotal_ModelDiscrepancy(Model_discrepancy);
+    SetHistoryOutputValue("INVERSE_PROBLEM", Model_discrepancy);
+    std::cout<<"Model Discrepancy = "<<Model_discrepancy<<'\n';
   }
 }
 

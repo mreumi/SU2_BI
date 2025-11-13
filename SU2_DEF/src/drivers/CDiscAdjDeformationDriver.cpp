@@ -25,6 +25,7 @@
  * License along with SU2. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #define ENABLE_MAPS
 #include "../../../Common/include/CConfig.hpp"
 #undef ENABLE_MAPS
@@ -668,7 +669,7 @@ void CDiscAdjDeformationDriver::SetProjection_AD(CGeometry* geometry, CConfig* c
          << endl;
 
   /*--- Start recording of operations. ---*/
-
+  std::cout<<"+=+=+=+=+=+ Starting AD recording..."<<std::endl;
   AD::StartRecording();
 
   /*--- Register design variables as input and set them to zero

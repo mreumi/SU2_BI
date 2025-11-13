@@ -2927,7 +2927,7 @@ su2double CFVMFlowSolverBase<V,R>::EvaluateCommonObjFunc(const CConfig& config) 
     case INVERSE_DESIGN_HEATFLUX:
       objFun += weight * Total_HeatFluxDiff;
       break;
-    case INVERSE_DESIGN:
+    case INVERSE_PROBLEM:
       objFun += weight * Total_ModelDiscrepancy;
       break;
     case EQUIVALENT_AREA:

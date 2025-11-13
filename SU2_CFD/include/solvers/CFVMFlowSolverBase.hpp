@@ -152,7 +152,7 @@ class CFVMFlowSolverBase : public CSolver {
   su2double AeroCoeffForceRef = 1.0;    /*!< \brief Reference force for aerodynamic coefficients. */
   su2double DynamicPressureRef = 1.0;   /*!< \brief Reference dynamic pressure. */
 
-  su2double Total_ModelDiscrepancy = 0.0;         /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
+  su2double Total_ModelDiscrepancy = 0.0; /*!< \brief Model Discrepancy for inverse problem. */
 
   su2double Total_CpDiff = 0.0;         /*!< \brief Total Equivalent Area coefficient for all the boundaries. */
   su2double Total_HeatFluxDiff = 0.0;   /*!< \brief Total Equivalent Area coefficient for all the boundaries. */

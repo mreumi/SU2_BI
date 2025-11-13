@@ -768,7 +768,7 @@ void CAdjEulerSolver::SetForceProj_Vector(CGeometry *geometry, CSolver **solver_
             ForceProj_Vector[0] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[0]/Area; ForceProj_Vector[1] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[1]/Area;
             if (nDim == 3) ForceProj_Vector[2] += -Weight_ObjFunc*2.0*(Cp-CpTarget)*Normal[2]/Area;
             break;
-          case INVERSE_DESIGN :
+          case INVERSE_PROBLEM :
             // SEEMS TO BE UNUNED?
             // ModelPrediction = solver_container[FLOW_SOL]->GetModelPrediction(iMarker, iVertex);
             // should be something like: solver_container[FLOW_SOL]->GetNodes()->GetVelocity(iPoint, iDim)

@@ -93,6 +93,7 @@ class CFluidModel {
  public:
   virtual ~CFluidModel() {}
 
+  inline int RegisterCustomValue () { return LaminarViscosity->RegisterViscosity(); }
   /*!
    * \brief Get fluid pressure.
    */

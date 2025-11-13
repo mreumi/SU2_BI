@@ -63,6 +63,14 @@ class CViscosityModel {
    */
   virtual void SetViscosity(su2double t, su2double rho) = 0;
 
+  inline int RegisterViscosity() {
+      std::cout << "Register viscosity in fluid model." << std::endl;
+      int index = 0;
+      AD::RegisterInput(mu_);
+      AD::SetIndex(index, mu_);
+      return index;
+    }
+
  protected:
   su2double mu_{0.0};        /*!< \brief Dynamic viscosity. */
   su2double dmudrho_t_{0.0}; /*!< \brief DmuDrho_T. */

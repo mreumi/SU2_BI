@@ -204,7 +204,7 @@ void CFlowCompOutput::SetHistoryOutputFields(CConfig *config){
 
   AddCpInverseDesignOutput();
 
-  AddInverseDesignOutput();
+  AddInverseProblemOutput();
 
   AddNearfieldInverseDesignOutput();
 
@@ -472,9 +472,9 @@ void CFlowCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
 
   SetCpInverseDesign(flow_solver, geometry, config);
 
-  /*--- Set x-velocity diff fields ---*/
+  /*--- Set model discrepancy ---*/
 
-  SetInverseDesign(flow_solver, geometry, config);
+  SetInverseProblem(flow_solver, geometry, config);
 
   /*--- Set nearfield diff fields ---*/
 
