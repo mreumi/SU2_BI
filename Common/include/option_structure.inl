@@ -655,6 +655,9 @@ class COptionDVParam : public COptionBase {
         case ROTATE_GRID:
           nParamDV[iDV] = 6;
           break;
+        case IP_VISCOSITY:
+          nParamDV[iDV] = 0;
+          break;
         default: {
           string newstring;
           newstring.append(this->name);

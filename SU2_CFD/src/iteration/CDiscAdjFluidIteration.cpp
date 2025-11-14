@@ -26,6 +26,7 @@
  */
 
 #include "../../include/iteration/CDiscAdjFluidIteration.hpp"
+#include <iostream>
 #include "../../include/output/COutput.hpp"
 
 void CDiscAdjFluidIteration::Preprocess(COutput* output, CIntegration**** integration, CGeometry**** geometry,
@@ -441,8 +442,13 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       kind_recording == RECORDING::TAG_CHECK_SOLVER_AND_MESH) {
 
     /*--- Register node coordinates as input ---*/
-    geometry0->RegisterCoordinates();
-  }
+    if(config[iZone]->GetInvProblem()) {
+      solvers0[ADJFLOW_SOL]->RegisterModelParameter(geometry0, config[iZone]);
+    }
+    else {
+        geometry0->RegisterCoordinates();
+    }
+    }
 
   if (kind_recording == RECORDING::MESH_DEFORM) {
     /*--- Undeformed mesh coordinates ---*/

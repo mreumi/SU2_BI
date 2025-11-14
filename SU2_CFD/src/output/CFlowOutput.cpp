@@ -2078,7 +2078,7 @@ void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, 
             n_points++;
         }
     }
-    std::cout<<"Considered number of target values on this rank: "<<n_points<<'\n';
+    std::cout<<"Considered number of target values for model discrepancy on this rank: "<<n_points<<'\n';
 
     su2double tmp = Model_discrepancy;
     SU2_MPI::Allreduce(&tmp, &Model_discrepancy, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
@@ -2086,7 +2086,14 @@ void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, 
     // Update the total model discrepancy
     solver->SetTotal_ModelDiscrepancy(Model_discrepancy);
     SetHistoryOutputValue("INVERSE_PROBLEM", Model_discrepancy);
+
+    // Write value to file and to screen
+    ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
+    // TODO: make MPI-suitable
+    ModelDiscrepancyStream << std::setprecision(12) << Model_discrepancy << '\n';
+    ModelDiscrepancyStream.close();
     std::cout<<"Model Discrepancy = "<<Model_discrepancy<<'\n';
+
   }
 }
 

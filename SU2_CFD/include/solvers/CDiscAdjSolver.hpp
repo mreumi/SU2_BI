@@ -59,6 +59,7 @@ protected:
   su2double Total_Sens_ModVel;   /*!< \brief Total sensitivity to inlet velocity (incompressible). */
   su2double Mach, Alpha, Beta, Temperature, BPressure, ModVel;
   su2double TemperatureRad, Total_Sens_Temp_Rad;
+  int CustomValue_Index;
 
   CDiscAdjVariable* nodes = nullptr;  /*!< \brief The highest level in the variable hierarchy this solver can safely use. */
 
@@ -96,6 +97,16 @@ public:
    * \param[in] config_container - The particular config.
    */
   void RegisterSolution(CGeometry *geometry, CConfig *config) override;
+
+  /*!
+   * \brief A virtual member.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] reset - If true reset variables to their initial values.
+   */
+  void RegisterModelParameter(CGeometry* geometry, CConfig* config, bool reset) override;
+
+  void GetModelParametersSensitivity() override;
 
   /*!
    * \brief Performs the preprocessing of the adjoint AD-based solver.

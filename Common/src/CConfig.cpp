@@ -2741,6 +2741,9 @@ void CConfig::SetConfig_Options() {
   addBoolOption("INV_DESIGN", InvDesign, false);
 
   /* DESCRIPTION: Evaluate inverse design on the surface  */
+  addBoolOption("INV_PROBLEM", InvProblem, false);
+
+  /* DESCRIPTION: Evaluate inverse design on the surface  */
   addBoolOption("INV_DESIGN_CP", InvDesign_Cp, false);
 
   /* DESCRIPTION: Evaluate inverse design on the surface  */
@@ -3175,7 +3178,6 @@ void CConfig::SetConfig_Parsing(istream& config_buffer){
       }
 
       /*--- New found option. Add it to the map, and delete from all options ---*/
-
       included_options.insert(pair<string, bool>(option_name, true));
       all_options.erase(option_name);
 
@@ -6767,6 +6769,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           case FFD_CAMBER:            cout << "FFD (camber) <-> "; break;
           case FFD_THICKNESS:         cout << "FFD (thickness) -> "; break;
           case FFD_ANGLE_OF_ATTACK:   cout << "FFD (angle of attack) <-> "; break;
+          case IP_VISCOSITY:          cout << "Inverse problem viscosity <-> "; break;
         }
 
         for (iMarker_DV = 0; iMarker_DV < nMarker_DV; iMarker_DV++) {
@@ -6783,6 +6786,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
 
         if ((Design_Variable[iDV] == NO_DEFORMATION) ||
             (Design_Variable[iDV] == FFD_SETTING) ||
+            (Design_Variable[iDV] == IP_VISCOSITY) ||
             (Design_Variable[iDV] == SCALE) ) nParamDV = 0;
         if ((Design_Variable[iDV] == ANGLE_OF_ATTACK) ||
             (Design_Variable[iDV] == HICKS_HENNE_CAMBER)) nParamDV = 1;
@@ -6812,6 +6816,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
 
           if ((iParamDV == 0) &&
               ((Design_Variable[iDV] == NO_DEFORMATION) ||
+               (Design_Variable[iDV] == IP_VISCOSITY) ||
                (Design_Variable[iDV] == FFD_SETTING) ||
                (Design_Variable[iDV] == FFD_ANGLE_OF_ATTACK) ||
                (Design_Variable[iDV] == FFD_CONTROL_POINT_2D) ||
@@ -6910,7 +6915,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           else {                         cout << "." << endl; }
           break;
         case INVERSE_DESIGN_PRESSURE:    cout << "Inverse design (Cp) objective function." << endl; break;
-        case INVERSE_PROBLEM:             cout << "Inverse design objective function." << endl; break;
+        case INVERSE_PROBLEM:            cout << "Inverse design objective function." << endl; break;
         case INVERSE_DESIGN_HEATFLUX:    cout << "Inverse design (Heat Flux) objective function." << endl; break;
         case SIDEFORCE_COEFFICIENT:      cout << "Side force objective function." << endl; break;
         case EFFICIENCY:                 cout << "CL/CD objective function." << endl; break;

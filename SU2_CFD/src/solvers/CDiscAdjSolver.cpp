@@ -295,6 +295,31 @@ void CDiscAdjSolver::RegisterVariables(CGeometry *geometry, CConfig *config, boo
   END_SU2_OMP_SAFE_GLOBAL_ACCESS
 }
 
+void CDiscAdjSolver::RegisterModelParameter(CGeometry* geometry, CConfig* config, bool reset) {
+  /*--- Register the variable for AD. ---*/
+
+  // Register directly in the flow solver, not via the config back and forth
+  // mind the config post-processing and non-dimensionalization
+  // CustomValue_Index = direct_solver->GetFluidModel()->RegisterCustomValue();
+  // REGISTER A TUBULENCE MODEL CORRECTION
+  CustomValue_Index = direct_solver->GetFluidModel()->RegisterCustomValue();
+}
+
+void CDiscAdjSolver::GetModelParametersSensitivity() {
+  ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
+  su2double total_derivative_value;
+  su2double local_derivative_value = AD::GetDerivative(CustomValue_Index);
+  SU2_MPI::Allreduce(&local_derivative_value, &total_derivative_value, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  if (rank == MASTER_NODE) {
+    GradientModelParameters << std::setprecision(12) << total_derivative_value << '\n';
+    std::cout << "Derivative w.r.t. model parameter : " << total_derivative_value << std::endl;
+  }
+  // Close the file after writing
+  GradientModelParameters.close();
+  if (rank == MASTER_NODE)
+    std:: cout << "Gradient with respect to model parameters successfully written in the file Gradient_Model_Parameters.dat\n";
+}
+
 void CDiscAdjSolver::RegisterOutput(CGeometry *geometry, CConfig *config) {
 
   /*--- Register variables as output of the solver iteration. Boolean false indicates that an output is registered ---*/

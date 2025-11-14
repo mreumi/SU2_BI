@@ -3756,6 +3756,12 @@ public:
                                         CConfig *config,
                                         bool reset = false) { }
 
+  inline virtual void RegisterModelParameter(CGeometry *geometry,
+                                              CConfig *config,
+                                              bool reset = false) { }
+
+  inline virtual void GetModelParametersSensitivity() {}
+
   /*!
    * \brief A virtual member.
    * \param[in] geometry - Geometrical definition of the problem.

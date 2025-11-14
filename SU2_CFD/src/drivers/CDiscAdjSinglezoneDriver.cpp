@@ -26,6 +26,7 @@
  */
 
 #include "../../include/drivers/CDiscAdjSinglezoneDriver.hpp"
+#include <iostream>
 #include "../../include/output/tools/CWindowingTools.hpp"
 #include "../../include/output/COutputFactory.hpp"
 #include "../../include/output/COutput.hpp"
@@ -438,7 +439,14 @@ void CDiscAdjSinglezoneDriver::SecondaryRecording(){
   /*--- Extract the computed sensitivity values. ---*/
 
   if (SecondaryVariables == RECORDING::MESH_COORDS) {
-    solver[MainSolver]->SetSensitivity(geometry, config);
+    if(config->GetInvProblem()) {
+      solver[MainSolver]->GetModelParametersSensitivity();
+    }
+    else {
+      solver[MainSolver]->SetSensitivity(geometry, config);
+    }
+    // solver[MainSolver]->SetSensitivity(geometry, config);
+    // solver[ADJFLOW_SOL]->GetModelParametersSensitivity();
   }
   else { // MESH_DEFORM
     solver[ADJMESH_SOL]->SetSensitivity(geometry, config, solver[MainSolver]);
