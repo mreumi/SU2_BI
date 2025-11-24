@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <iostream>
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
@@ -182,8 +183,10 @@ class CFVMFlowSolverBase : public CSolver {
   vector<vector<su2double> > CPressure;         /*!< \brief Pressure coefficient for each boundary and vertex. */
   vector<vector<su2double> > CPressureTarget;   /*!< \brief Target Pressure coefficient for each boundary and vertex. */
 
-  vector<vector<su2double> > ModelPrediction;              /*!< \brief Pressure coefficient for each boundary and vertex. */
-  vector<vector<su2double> > ModelPredictionTarget;        /*!< \brief Target X velocity for each boundary and vertex. */
+  CDatapointcloud InverseProblemTargetData;
+
+  //vector<vector<su2double> > ModelPrediction;              /*!< \brief Pressure coefficient for each boundary and vertex. */
+  //vector<vector<su2double> > ModelPredictionTarget;        /*!< \brief Target X velocity for each boundary and vertex. */
 
   vector<vector<su2double> > YPlus;             /*!< \brief Yplus for each boundary and vertex. */
   vector<vector<su2double> > UTau;              /*!< \brief UTau for each boundary and vertex. */
@@ -2114,9 +2117,9 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline su2double GetModelPrediction(unsigned short val_marker, unsigned long val_vertex) const final {
-    return ModelPrediction[val_marker][val_vertex];
-  }
+  //inline su2double GetModelPrediction(unsigned short val_marker, unsigned long val_vertex) const final {
+ //   return ModelPrediction[val_marker][val_vertex];
+  //}
 
     /*!
    * \brief Provide the Target Pressure coefficient.
@@ -2124,8 +2127,8 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline su2double GetModelPredictionTarget(unsigned short val_marker, unsigned long val_vertex) const final {
-    return ModelPredictionTarget[val_marker][val_vertex];
+  inline CDatapointcloud GetInverseProblemTargetData() const final {
+    return InverseProblemTargetData;
   }
 
   /*!
@@ -2134,10 +2137,9 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline void SetModelPredictionTarget(unsigned short val_marker, unsigned long val_vertex, su2double val_discrepancy) final {
-    ModelPredictionTarget[val_marker][val_vertex] = val_discrepancy;
+  inline void SetInverseProblemTargetData(const CDatapointcloud& data) final {
+        InverseProblemTargetData = data;
   }
-
 
   /*!
    * \brief Value of the characteristic variables at the boundaries.

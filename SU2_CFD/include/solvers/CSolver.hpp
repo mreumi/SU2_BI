@@ -57,6 +57,8 @@
 #include "../../../Common/include/toolboxes/MMS/CVerificationSolution.hpp"
 #include "../variables/CVariable.hpp"
 
+#include "../../include/output/CDatapointcloud.hpp"
+
 #ifdef HAVE_LIBROM
 #include "librom.h"
 #endif
@@ -102,7 +104,7 @@ protected:
 
   su2double Total_Custom_ObjFunc = 0.0; /*!< \brief Total custom objective function. */
   su2double Total_ComboObj = 0.0;       /*!< \brief Total 'combo' objective for all monitored boundaries */
-
+  
   /*--- Variables that need to go. ---*/
 
   su2double *Residual,      /*!< \brief Auxiliary nVar vector. */
@@ -2789,20 +2791,18 @@ public:
    * \brief A virtual member.
    * \param[in] val_marker - Surface marker where the coefficient is computed.
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
-   * \return Value of the pressure coefficient.
+   * \return Target coordinates and data std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>>.
    */
-  inline virtual su2double GetModelPredictionTarget(unsigned short val_marker, unsigned long val_vertex) const { return 0; }
+  inline virtual CDatapointcloud GetInverseProblemTargetData() const { 
+    return {}; }
 
-
-    /*!
+  /*!
    * \brief A virtual member.
-   * \param[in] val_marker - Surface marker where the coefficient is computed.
-   * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
+   * \param[in] target_coordinates  - Coordinates where the targets are provided.
+   * \param[in] target_values       - Target values.
    * \return Value of the pressure coefficient.
    */
-  inline virtual void SetModelPredictionTarget(unsigned short val_marker,
-                                    unsigned long val_vertex,
-                                    su2double val_discrepancy) { }
+  inline virtual void SetInverseProblemTargetData(const CDatapointcloud& data) { }
 
   /*!
    * \brief A virtual member.
