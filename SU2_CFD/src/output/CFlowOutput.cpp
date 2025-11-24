@@ -41,7 +41,6 @@
 #include "../../include/variables/CPrimitiveIndices.hpp"
 #include "../../include/fluid/CCoolProp.hpp"
 
-//#include "../../include/output/CDatapoint.hpp"
 #include "../../include/output/CDatapointcloud.hpp"
 #include "../../include/output/CInterpolator.hpp"
 
@@ -1923,6 +1922,7 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
 
 std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>> readTargetData(const std::string& target_filename, int nDim) {
   std::cout<<"Reading target file: "<<target_filename<<'\n';
+  // TODO: store data in the class so that we don't have to read it every time
   
   string text_line;
   ifstream Surface_file;
@@ -2024,77 +2024,80 @@ void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, 
   }
   CDatapointcloud mesh_pointcloud(mesh_coordinates, predicted_values);
 
-  // Get the target file from the cfg
-  const auto target_filename = config->GetTargetfilename();
-  std::ifstream Surface_file;
-
-  // Check if the target file exists
-  if (!Surface_file.good()) {
-    std::cout<<"File not found, skipping model discrepancy calculation."<<'\n';
-    solver->SetTotal_ModelDiscrepancy(0.0);
-    SetHistoryOutputValue("INVERSE_PROBLEM", 0.0);
-    return;
-  }
-
-  // Read the target values from file and set to ModelPredictionTarget
+  // Get target data, on first iterations or in dic. adjoint read it from file (and set to var) afterwards, just get the var
   if ((config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint()) {
 
-    // Read target data from file and create datapointcloud of target points
-    auto [target_coordinates, target_values] = readTargetData(target_filename, nDim);
-    CDatapointcloud target_pointcloud(target_coordinates, target_values);
-    
-    // Create the interpolator
-    // TODO: Make the power and method configurable from the cfg
-    std::size_t k       = 3;
-    su2double power     = 2.0;
-    std::string method  = "IDW";
+    // Get the target file from the cfg
+    const auto target_filename = config->GetTargetfilename();
+    std::ifstream Surface_file;
 
-    Interpolator my_interpolator(k, power, method);
-    CDatapointcloud target_predictions = my_interpolator.interpolate(mesh_pointcloud, target_pointcloud);
- 
-    // Compute the model discrepancy
-    su2double Model_discrepancy = 0.0;
-    int n_points = 0;
-
-    for (std::size_t i = 0; i < target_coordinates.size(); ++i) {
-        const auto& target_point_coords = target_coordinates[i];
-        const auto& target_point_values = target_values[i];
-        const auto& predicted_vals      = target_predictions.points[i].values;
-
-        // Check if target value is set (not NaN)
-        if (!std::isnan(target_point_values[0])) { // X velocity target
-            su2double diff_x = predicted_vals[0] - target_point_values[0];
-            Model_discrepancy += diff_x * diff_x;
-            n_points++;
-        }
-        if (!std::isnan(target_point_values[1])) { // Y velocity target
-            su2double diff_y = predicted_vals[1] - target_point_values[1];
-            Model_discrepancy += diff_y * diff_y;
-            n_points++;
-        }
-        if (nDim == 3 && !std::isnan(target_point_values[2])) { // Z velocity target
-            su2double diff_z = predicted_vals[2] - target_point_values[2];
-            Model_discrepancy += diff_z * diff_z;
-            n_points++;
-        }
+    // Check if the target file exists
+    if (!Surface_file.good()) {
+      std::cout<<"File not found, skipping model discrepancy calculation."<<'\n';
+      solver->SetTotal_ModelDiscrepancy(0.0);
+      SetHistoryOutputValue("INVERSE_PROBLEM", 0.0);
+      return;
     }
-    std::cout<<"Considered number of target values for model discrepancy on this rank: "<<n_points<<'\n';
+    // Read target data from file and store target points
+    auto [target_coordinates, target_values] = readTargetData(target_filename, nDim);
+    CDatapointcloud input_target_pointcloud(target_coordinates, target_values);
+    solver->SetInverseProblemTargetData(input_target_pointcloud);
+  } 
+  CDatapointcloud target_pointcloud = solver->GetInverseProblemTargetData();
+  
 
-    su2double tmp = Model_discrepancy;
-    SU2_MPI::Allreduce(&tmp, &Model_discrepancy, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  // Create the interpolator
+  // TODO: Make the power and method configurable from the cfg
+  std::size_t k       = 3;
+  su2double power     = 2.0;
+  std::string method  = "IDW";
 
-    // Update the total model discrepancy
-    solver->SetTotal_ModelDiscrepancy(Model_discrepancy);
-    SetHistoryOutputValue("INVERSE_PROBLEM", Model_discrepancy);
+  Interpolator my_interpolator(k, power, method);
+  CDatapointcloud target_predictions = my_interpolator.interpolate(mesh_pointcloud, target_pointcloud);
 
-    // Write value to file and to screen
-    ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
-    // TODO: make MPI-suitable
-    ModelDiscrepancyStream << std::setprecision(12) << Model_discrepancy << '\n';
-    ModelDiscrepancyStream.close();
-    std::cout<<"Model Discrepancy = "<<Model_discrepancy<<'\n';
+  // Compute the model discrepancy
+  su2double Model_discrepancy = 0.0;
+  int n_points = 0;
 
+  for (std::size_t i = 0; i < target_pointcloud.size(); ++i) {
+      const auto& target_point_coords = target_pointcloud.points[i].coords;
+      const auto& target_point_values = target_pointcloud.points[i].values;
+      const auto& predicted_vals      = target_predictions.points[i].values;
+
+      // Check if target value is set (not NaN)
+      if (!std::isnan(target_point_values[0])) { // X velocity target
+          su2double diff_x = predicted_vals[0] - target_point_values[0];
+          Model_discrepancy += diff_x * diff_x;
+          n_points++;
+      }
+      if (!std::isnan(target_point_values[1])) { // Y velocity target
+          su2double diff_y = predicted_vals[1] - target_point_values[1];
+          Model_discrepancy += diff_y * diff_y;
+          n_points++;
+      }
+      if (nDim == 3 && !std::isnan(target_point_values[2])) { // Z velocity target
+          su2double diff_z = predicted_vals[2] - target_point_values[2];
+          Model_discrepancy += diff_z * diff_z;
+          n_points++;
+      }
   }
+  //std::cout<<"Considered number of target values for model discrepancy on this rank: "<<n_points<<'\n';
+
+  su2double tmp = Model_discrepancy;
+  SU2_MPI::Allreduce(&tmp, &Model_discrepancy, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+
+  // Update the total model discrepancy
+  solver->SetTotal_ModelDiscrepancy(Model_discrepancy);
+  SetHistoryOutputValue("INVERSE_PROBLEM", Model_discrepancy);
+
+  // Write value to file and to screen
+  ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
+  // TODO: make MPI-suitable
+  ModelDiscrepancyStream << std::setprecision(12) << Model_discrepancy << '\n';
+  ModelDiscrepancyStream.close();
+  //std::cout<<"Model Discrepancy = "<<Model_discrepancy<<'\n';
+
+  //}
 }
 
 void CFlowOutput::AddNearfieldInverseDesignOutput(){
