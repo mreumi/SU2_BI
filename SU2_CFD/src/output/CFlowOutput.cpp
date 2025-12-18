@@ -2045,7 +2045,6 @@ void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, 
   } 
   CDatapointcloud target_pointcloud = solver->GetInverseProblemTargetData();
   
-
   // Create the interpolator
   // TODO: Make the power and method configurable from the cfg
   std::size_t k       = 3;

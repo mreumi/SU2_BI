@@ -1061,6 +1061,9 @@ void CConfig::SetPointersNull() {
   VolumeOutputFrequencies = nullptr;
   ConvField = nullptr;
 
+  /*--- IP Parameters ---*/
+  IP_Parameters = nullptr;
+  nIP_Parameters = 0;
   /*--- Variable initialization ---*/
 
   TimeIter   = 0;
@@ -2158,8 +2161,6 @@ void CConfig::SetConfig_Options() {
   addStringOption("MESH_FILENAME", Mesh_FileName, string("mesh"));
   /*!\brief MESH_OUT_FILENAME \n DESCRIPTION: Mesh output file name. Used when converting, scaling, or deforming a mesh. \n DEFAULT: mesh_out \ingroup Config*/
   addStringOption("MESH_OUT_FILENAME", Mesh_Out_FileName, string("mesh_out"));
-  /* DESCRIPTION:  Mesh input file */
-  addStringOption("TARGET_FILENAME", Targetdata_Filename, string("targetdata_xvel.dat"));
 
   /* DESCRIPTION: List of the number of grid points in the RECTANGLE or BOX grid in the x,y,z directions. (default: (33,33,33) ). */
   addShortListOption("MESH_BOX_SIZE", nMesh_Box_Size, Mesh_Box_Size);
@@ -2318,6 +2319,13 @@ void CConfig::SetConfig_Options() {
 
   /* DESCRIPTION: Bound the line search in the optimizer */
   addDoubleOption("OPT_LINE_SEARCH_BOUND", Opt_LineSearch_Bound, 1E6);
+
+  /*!\par CONFIG_CATEGORY: Inverse Problem*/
+
+  /*DESCRIPTION: list of parameters for inverse problem*/
+  addStringListOption("IP_PARAMETERS", nIP_Parameters, IP_Parameters);
+  /* DESCRIPTION:  Mesh input file */
+  addStringOption("TARGET_FILENAME", Targetdata_Filename, string("targetdata_xvel.dat"));
 
   /*!\par CONFIG_CATEGORY: Wind Gust \ingroup Config*/
   /*--- Options related to wind gust simulations ---*/

@@ -28,7 +28,9 @@
 #pragma once
 
 #include <cmath>
+#include <iostream>
 #include <memory>
+#include <unordered_set>
 
 #include "../../../Common/include/CConfig.hpp"
 #include "../../../Common/include/basic_types/datatype_structure.hpp"
@@ -93,7 +95,45 @@ class CFluidModel {
  public:
   virtual ~CFluidModel() {}
 
-  inline int RegisterCustomValue () { return LaminarViscosity->RegisterViscosity(); }
+  inline vector<int> RegisterCustomValues (const CConfig* config) { 
+
+    // Get the list of IP parameters
+    const string* ip_pars = config->GetIP_Parameters();
+    unsigned short n_IPpars = config->GetnIP_Parameters();
+
+    vector<int> indices;
+    indices.reserve(n_IPpars);
+
+    unordered_map<string, int> name_to_index;   // avoid duplicates by name
+    int index = 0; // starting AD index (would be better to get from outside?)
+
+    
+    for (unsigned short i=0; i<n_IPpars; i++) {
+      const string& ip_par_name = ip_pars[i];
+      std::cout << ">>> IP parameter: " << i << ": " << ip_par_name << std::endl;
+        
+      // If we have seen it, reuse the same index (do NOT register again)
+      auto it = name_to_index.find(ip_par_name);
+      if (it != name_to_index.end()) {
+        indices.push_back(it->second);
+        continue;
+      }
+
+      // First time seeing this parameter: register it
+      int idx = -1;
+
+      if (ip_par_name == "VISCOSITY") {
+        idx = LaminarViscosity->RegisterViscosity(index);
+      } else {
+        std::cout << "Warning: Unknown IP parameter '" << ip_par_name << "' (skipping)\n";
+        indices.push_back(-1); // marks invalid parameters. idx>0 will be checked later
+      }
+
+      name_to_index[ip_par_name] = idx;
+      indices.push_back(idx);
+    }
+    return indices;
+  }
   /*!
    * \brief Get fluid pressure.
    */

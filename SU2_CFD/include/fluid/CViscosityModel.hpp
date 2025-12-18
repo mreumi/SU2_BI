@@ -43,6 +43,11 @@ class CViscosityModel {
   void operator=(const CViscosityModel&) = delete;
   virtual ~CViscosityModel() {}
 
+  // Parameters needed for inverse problems:
+  bool viscosity_registered_ = false;
+  int viscosity_index_ = -1;
+
+
   /*!
    * \brief return viscosity value.
    */
@@ -63,12 +68,20 @@ class CViscosityModel {
    */
   virtual void SetViscosity(su2double t, su2double rho) = 0;
 
-  inline int RegisterViscosity() {
+  inline int RegisterViscosity(int &index) {
+
+      if (viscosity_registered_) {
+        return viscosity_index_;
+      }
+
       std::cout << "Register viscosity in fluid model." << std::endl;
-      int index = 0;
       AD::RegisterInput(mu_);
       AD::SetIndex(index, mu_);
-      return index;
+
+      viscosity_index_ = index;
+      viscosity_registered_ = true;
+      
+      return index++;
     }
 
  protected:

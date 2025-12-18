@@ -300,23 +300,43 @@ void CDiscAdjSolver::RegisterModelParameter(CGeometry* geometry, CConfig* config
 
   // Register directly in the flow solver, not via the config back and forth
   // mind the config post-processing and non-dimensionalization
-  // CustomValue_Index = direct_solver->GetFluidModel()->RegisterCustomValue();
+  // CustomValue_Index = direct_solver->GetFluidModel()->RegisterCustomValues();
   // REGISTER A TUBULENCE MODEL CORRECTION
-  CustomValue_Index = direct_solver->GetFluidModel()->RegisterCustomValue();
+  CustomValue_Indices = direct_solver->GetFluidModel()->RegisterCustomValues(config);
 }
 
 void CDiscAdjSolver::GetModelParametersSensitivity() {
+
   ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
   su2double total_derivative_value;
-  su2double local_derivative_value = AD::GetDerivative(CustomValue_Index);
-  SU2_MPI::Allreduce(&local_derivative_value, &total_derivative_value, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
-  if (rank == MASTER_NODE) {
-    GradientModelParameters << std::setprecision(12) << total_derivative_value << '\n';
-    std::cout << "Derivative w.r.t. model parameter : " << total_derivative_value << std::endl;
+
+  for (int idx : CustomValue_Indices) {
+
+    su2double local_derivative_value = 0.0;
+
+    if (idx >= 0) {
+      local_derivative_value = AD::GetDerivative(idx);
+    }
+
+    SU2_MPI::Allreduce(&local_derivative_value, &total_derivative_value, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+   
+    if (rank == MASTER_NODE) {
+      GradientModelParameters << std::setprecision(12) << total_derivative_value << '\n';
+      std::cout << "Derivative w.r.t. model parameter : " << total_derivative_value << std::endl;
+    }
   }
+  // su2double local_derivative_value = AD::GetDerivative(CustomValue_Index);
+  // SU2_MPI::Allreduce(&local_derivative_value, &total_derivative_value, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  // if (rank == MASTER_NODE) {
+  //   GradientModelParameters << std::setprecision(12) << total_derivative_value << '\n';
+  //   std::cout << "Derivative w.r.t. model parameter : " << total_derivative_value << std::endl;
+  // }
   // Close the file after writing
   GradientModelParameters.close();
-  if (rank == MASTER_NODE)
+  if (rank == MASTER_NODE){
+    for (int idx : CustomValue_Indices)
+      std::cout << "Custom index: " << idx << "\n";
+  }
     std:: cout << "Gradient with respect to model parameters successfully written in the file Gradient_Model_Parameters.dat\n";
 }
 

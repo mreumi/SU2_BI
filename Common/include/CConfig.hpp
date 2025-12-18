@@ -1267,6 +1267,10 @@ private:
   su2double* Species_Init;         /*!< \brief Initial uniform value for scalar transport. */
   unsigned short nSpecies_Init;    /*!< \brief Number of entries of SPECIES_INIT */
 
+  /*--- Options for inverse problems---*/
+  unsigned short nIP_Parameters;  /*!< \brief Number of IP parameters. */
+  string* IP_Parameters;          /*!< \brief name of IP parameters. */
+
   /*--- Additional flamelet solver options ---*/
   FluidFlamelet_ParsedOptions flamelet_ParsedOptions; /*!< \brief Additional flamelet solver options */
 
@@ -10109,5 +10113,18 @@ public:
    * \return option data structure for the flamelet fluid model.
    */
   const FluidFlamelet_ParsedOptions& GetFlameletParsedOptions() const { return flamelet_ParsedOptions; }
+
+  
+  /*!
+   * \brief Get the number of parameters for inverse problem.
+   * \return Number of parameters for inverse problem.
+   */
+  unsigned short GetnIP_Parameters(void) const { return nIP_Parameters; }
+
+  /*!
+   * \brief Get the names of strings for the inverse problem.
+   * \return Names of strings for the inverse problem.
+   */
+  const string* GetIP_Parameters(void) const { return IP_Parameters; }
 
 };
