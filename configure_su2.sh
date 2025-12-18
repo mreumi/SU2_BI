@@ -16,4 +16,4 @@ meson setup build \
   -Denable-tests=true \
   -Dwith-omp=false
 
-ninja -C build
+./ninja -C build install 
