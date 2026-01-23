@@ -468,8 +468,6 @@ void CNEMOCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
 
   SetCpInverseDesign(NEMO_solver, geometry, config);
 
-  SetInverseProblem(NEMO_solver, geometry, config);
-
   /*--- Keep this as last, since it uses the history values that were set. ---*/
 
   SetCustomOutputs(solver, geometry, config);

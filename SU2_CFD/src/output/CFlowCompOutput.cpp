@@ -474,7 +474,7 @@ void CFlowCompOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSol
 
   /*--- Set model discrepancy ---*/
 
-  SetInverseProblem(flow_solver, geometry, config);
+  SetInverseProblem(solver, geometry, config);
 
   /*--- Set nearfield diff fields ---*/
 

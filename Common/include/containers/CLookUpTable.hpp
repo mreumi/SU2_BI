@@ -320,6 +320,13 @@ class CLookUpTable {
   CLookUpTable(const std::string& file_name_lut, std::string name_CV1_in, std::string name_CV2_in);
 
   /*!
+  * \brief Try to get LUT column index for a variable name.
+  * \return true if found, false otherwise.
+  */
+  bool TryGetVarIndex(const std::string& var_name, unsigned long& idx) const;
+
+
+  /*!
    * \brief Print information to screen.
    */
   void PrintTableInfo();
@@ -435,4 +442,7 @@ class CLookUpTable {
    * Returns the table variable index which will always return zero when looked up.
    */
   unsigned long GetNullIndex() const { return idx_null; }
+
+  unsigned short GetTableDimension() const { return table_dim; }
+
 };

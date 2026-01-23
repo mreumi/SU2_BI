@@ -812,3 +812,10 @@ bool CLookUpTable::CheckForVariables(const std::vector<std::string>& vars_to_che
   }
   return true;
 }
+
+bool CLookUpTable::TryGetVarIndex(const std::string& var_name, unsigned long& idx) const {
+  auto it = std::find(names_var.begin(), names_var.end(), var_name);
+  if (it == names_var.end()) return false;
+  idx = static_cast<unsigned long>(std::distance(names_var.begin(), it));
+  return true;
+}

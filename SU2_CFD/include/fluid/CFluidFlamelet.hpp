@@ -107,6 +107,12 @@ class CFluidFlamelet final : public CFluidModel {
     }
   }
  public:
+  CLookUpTable* GetLookUpTable() const { return look_up_table; }
+
+  const std::vector<std::string>& GetControllingVariableNames() const {
+    return controlling_variable_names;
+  }
+
   CFluidFlamelet(CConfig* config, su2double value_pressure_operating);
 
   ~CFluidFlamelet();
@@ -160,4 +166,12 @@ class CFluidFlamelet final : public CFluidModel {
    * \return Inclusion of preferential diffusion model.
    */
   inline bool GetPreferentialDiffusion() const override { return preferential_diffusion; }
+
+  /*!
+   * \brief Get the index of the LUT controlling variables in the scalar array.
+   */
+  unsigned int GetProgVarIndex() const { return I_PROGVAR; }
+  unsigned int GetEnthalpyIndex() const { return I_ENTH; }
+  unsigned int GetMixtureFractionIndex() const { return I_MIXFRAC; }
+
 };

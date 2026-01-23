@@ -69,6 +69,7 @@ class CViscosityModel {
   virtual void SetViscosity(su2double t, su2double rho) = 0;
 
   inline int RegisterViscosity(int &index) {
+  // function to register viscosity in the AD tape. If already registered, return the existing index, otherwise register it and return new index 
 
       if (viscosity_registered_) {
         return viscosity_index_;

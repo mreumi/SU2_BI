@@ -214,7 +214,7 @@ protected:
 
 
   /*!
-   * \brief Add inverse design output as history fields
+   * \brief Add inverse problem output as history fields
    */
   void AddInverseProblemOutput();
   
@@ -224,7 +224,7 @@ protected:
    * \param[in] geometry - Geometrical definition of the problem.
    * \param[in] config - Definition of the particular problem.
    */
-  void SetInverseProblem(CSolver *solver, const CGeometry *geometry, const CConfig *config);
+  void SetInverseProblem(CSolver** solver_container, const CGeometry *geometry, const CConfig *config);
   /*!
    * \brief Set CP inverse design output field values (and also into the solver).
    * \param[in,out] solver - The container holding all solution data.

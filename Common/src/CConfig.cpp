@@ -2324,8 +2324,10 @@ void CConfig::SetConfig_Options() {
 
   /*DESCRIPTION: list of parameters for inverse problem*/
   addStringListOption("IP_PARAMETERS", nIP_Parameters, IP_Parameters);
+  
   /* DESCRIPTION:  Mesh input file */
-  addStringOption("TARGET_FILENAME", Targetdata_Filename, string("targetdata_xvel.dat"));
+  addStringOption("TARGET_VELOCITY_FILENAME", TargetVelocityData_Filename, string("target_velocity_data.dat"));
+  addStringOption("TARGET_DISTANCE_FIELD_FILENAME", TargetDistanceField_Filename, string("target_distance_field.dat"));
 
   /*!\par CONFIG_CATEGORY: Wind Gust \ingroup Config*/
   /*--- Options related to wind gust simulations ---*/
@@ -6777,7 +6779,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           case FFD_CAMBER:            cout << "FFD (camber) <-> "; break;
           case FFD_THICKNESS:         cout << "FFD (thickness) -> "; break;
           case FFD_ANGLE_OF_ATTACK:   cout << "FFD (angle of attack) <-> "; break;
-          case IP_VISCOSITY:          cout << "Inverse problem viscosity <-> "; break;
+          case INV_PROBLEM:          cout << "Inverse problem viscosity <-> "; break;
         }
 
         for (iMarker_DV = 0; iMarker_DV < nMarker_DV; iMarker_DV++) {
@@ -6794,7 +6796,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
 
         if ((Design_Variable[iDV] == NO_DEFORMATION) ||
             (Design_Variable[iDV] == FFD_SETTING) ||
-            (Design_Variable[iDV] == IP_VISCOSITY) ||
+            (Design_Variable[iDV] == INV_PROBLEM) ||
             (Design_Variable[iDV] == SCALE) ) nParamDV = 0;
         if ((Design_Variable[iDV] == ANGLE_OF_ATTACK) ||
             (Design_Variable[iDV] == HICKS_HENNE_CAMBER)) nParamDV = 1;
@@ -6824,7 +6826,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
 
           if ((iParamDV == 0) &&
               ((Design_Variable[iDV] == NO_DEFORMATION) ||
-               (Design_Variable[iDV] == IP_VISCOSITY) ||
+               (Design_Variable[iDV] == INV_PROBLEM) ||
                (Design_Variable[iDV] == FFD_SETTING) ||
                (Design_Variable[iDV] == FFD_ANGLE_OF_ATTACK) ||
                (Design_Variable[iDV] == FFD_CONTROL_POINT_2D) ||
@@ -6923,7 +6925,7 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
           else {                         cout << "." << endl; }
           break;
         case INVERSE_DESIGN_PRESSURE:    cout << "Inverse design (Cp) objective function." << endl; break;
-        case INVERSE_PROBLEM:            cout << "Inverse design objective function." << endl; break;
+        case INVERSE_PROBLEM:            cout << "Inverse problem objective function." << endl; break;
         case INVERSE_DESIGN_HEATFLUX:    cout << "Inverse design (Heat Flux) objective function." << endl; break;
         case SIDEFORCE_COEFFICIENT:      cout << "Side force objective function." << endl; break;
         case EFFICIENCY:                 cout << "CL/CD objective function." << endl; break;
@@ -9495,14 +9497,59 @@ void CConfig::SetIncPressureOut_BC(su2double val_pressure) {
 
 }
 
-su2double CConfig::GetIsothermal_Temperature(const string& val_marker) const {
-
-  for (unsigned short iMarker_Isothermal = 0; iMarker_Isothermal < nMarker_Isothermal; iMarker_Isothermal++)
-    if (Marker_Isothermal[iMarker_Isothermal] == val_marker)
-      return Isothermal_Temperature[iMarker_Isothermal];
-
-  return Isothermal_Temperature[0];
+su2double& CConfig::GetIsothermal_TemperatureCorrectionRef(const std::string& marker) const {
+  // operator[] will default-construct (0.0) if missing
+  return IsoTemp_Correction_AD_[marker];
 }
+
+bool CConfig::IsIsothermalTempCorrectionRegistered(const std::string& marker) const {
+  auto it = IsoTemp_Correction_Registered_.find(marker);
+  return (it != IsoTemp_Correction_Registered_.end()) ? it->second : false;
+}
+
+int CConfig::GetIsothermalTempCorrectionIndex(const std::string& marker) const {
+  auto it = IsoTemp_Correction_Index_.find(marker);
+  return (it != IsoTemp_Correction_Index_.end()) ? it->second : -1;
+}
+
+void CConfig::SetIsothermalTempCorrectionRegistered(const std::string& marker, int idx) const {
+  IsoTemp_Correction_Index_[marker] = idx;
+  IsoTemp_Correction_Registered_[marker] = true;
+}
+
+su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) const {
+
+  for (unsigned short iMarker_Isothermal = 0; iMarker_Isothermal < nMarker_Isothermal; iMarker_Isothermal++) {
+    if (Marker_Isothermal[iMarker_Isothermal] == val_marker) {
+      const su2double Tbase = Isothermal_Temperature[iMarker_Isothermal];
+      const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(val_marker); // 0.0 unless registered/modified
+
+      const su2double& Tcor_ref = GetIsothermal_TemperatureCorrectionRef(val_marker);
+
+      // Debug output
+      const bool has_cor = IsoTemp_Correction_AD_.count(val_marker);
+      const bool is_reg  = IsoTemp_Correction_Registered_.count(val_marker) ?
+                          IsoTemp_Correction_Registered_.at(val_marker) : false;
+
+      return Tbase + Tcor;
+    }
+  }
+
+  // fallback (preserving your existing behavior)
+  // std::cout << "[ISO-T] marker='" << val_marker << "' not found, using first entry as fallback." << std::endl;
+  const su2double Tbase = Isothermal_Temperature[0];
+  const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(Marker_Isothermal[0]);
+  return Tbase + Tcor;
+}
+
+// su2double CConfig::GetIsothermal_Temperature(const string& val_marker) const {
+
+//   for (unsigned short iMarker_Isothermal = 0; iMarker_Isothermal < nMarker_Isothermal; iMarker_Isothermal++)
+//     if (Marker_Isothermal[iMarker_Isothermal] == val_marker)
+//       return Isothermal_Temperature[iMarker_Isothermal];
+
+//   return Isothermal_Temperature[0];
+// }
 
 su2double CConfig::GetWall_HeatFlux(const string& val_marker) const {
 

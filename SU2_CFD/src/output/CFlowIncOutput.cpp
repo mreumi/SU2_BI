@@ -278,10 +278,9 @@ void CFlowIncOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSolv
 
   SetRotatingFrameCoefficients(flow_solver);
 
-  /*--- Set model discrepancy ---*/
+  /*--- Set model discrepancy for inverse problems ---*/
 
-  SetInverseProblem(flow_solver, geometry, config);
-
+  SetInverseProblem(solver, geometry, config);
 
   /*--- Keep this as last, since it uses the history values that were set. ---*/
 

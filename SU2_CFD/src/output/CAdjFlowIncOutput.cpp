@@ -193,7 +193,18 @@ void CAdjFlowIncOutput::SetHistoryOutputFields(CConfig *config) {
     AddHistoryOutput("DEFORM_ITER", "DeformIter", ScreenOutputFormat::INTEGER, "DEFORM", "Linear solver iterations for the mesh deformation");
     AddHistoryOutput("DEFORM_RESIDUAL", "DeformRes", ScreenOutputFormat::FIXED, "DEFORM", "Residual of the linear solver for the mesh deformation");
   }
-
+  
+  // INVERSE PROBLEM OUTPUTS
+  if (config->GetInvProblem()) {
+      AddHistoryOutput("INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_NORM", "|d_Model_Disc_Tot|", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM_GRAD", "Norm of gradient of model discrepancy w.r.t. registered parameters for inverse problem", HistoryFieldType::COEFFICIENT);
+      for (size_t j = 0; j < config->GetnIP_Parameters(); ++j) {
+          stringstream ss;
+          ss << "INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_" << j;
+          string field_name = ss.str();
+          string short_name = "d_Model_Disc_d_" + config->GetIP_Parameters()[j];
+          AddHistoryOutput(field_name, short_name, ScreenOutputFormat::FIXED, "INVERSE_PROBLEM_GRAD", "Gradient of model discrepancy w.r.t. registered parameter " + to_string(j), HistoryFieldType::COEFFICIENT);
+      }
+    }
 }
 
 void CAdjFlowIncOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSolver **solver) {
@@ -271,6 +282,25 @@ void CAdjFlowIncOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CS
   if (config->GetDeform_Mesh()) {
     SetHistoryOutputValue("DEFORM_ITER", mesh_solver->System.GetIterations());
     SetHistoryOutputValue("DEFORM_RESIDUAL", log10(mesh_solver->System.GetResidual()));
+  }
+
+  if (config->GetInvProblem()) {
+    vector<su2double> ModelDiscrepancyGradient = adjflow_solver->GetModelParametersGradient(); 
+
+    // Write gradient to file and history (needs better location ?)
+    ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
+    for (size_t j = 0; j < ModelDiscrepancyGradient.size(); ++j) {
+        GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << '\n';
+        stringstream ss;
+        ss << "INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_" << j; // TODO: rename to variable name instead of index
+        string field_name = ss.str();
+        SetHistoryOutputValue(field_name, ModelDiscrepancyGradient[j]);
+    }
+    GradientModelParameters.close();
+
+    // Norm of the gradient
+    SetHistoryOutputValue("INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_NORM", adjflow_solver->GetModelParametersGradientNorm());
+    
   }
 
   LoadHistoryDataAdjScalar(config, solver);

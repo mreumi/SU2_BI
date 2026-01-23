@@ -30,9 +30,11 @@
 #include "../../include/output/tools/CWindowingTools.hpp"
 #include "../../include/output/COutputFactory.hpp"
 #include "../../include/output/COutput.hpp"
+#include "../../include/output/CFlowOutput.hpp"
 #include "../../include/iteration/CIterationFactory.hpp"
 #include "../../include/iteration/CTurboIteration.hpp"
 #include "../../../Common/include/toolboxes/CQuasiNewtonInvLeastSquares.hpp"
+#include "../../include/solvers/CSpeciesFlameletSolver.hpp"
 
 CDiscAdjSinglezoneDriver::CDiscAdjSinglezoneDriver(char* confFile,
                                                    unsigned short val_nZone,
@@ -192,6 +194,12 @@ void CDiscAdjSinglezoneDriver::Run() {
     StopCalc = iteration->Monitor(output_container[ZONE_0], integration_container, geometry_container,
                                   solver_container, numerics_container, config_container,
                                   surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
+
+    if(config->GetInvProblem()) {
+      // Wrapper for AD::GetDerivative to get model parameters sensitivity
+      // std::cout << "[INV-PROB] Computing model parameters sensitivity for inverse problem." << std::endl;
+      solver[MainSolver]->ComputeModelParametersGradient();
+    }
 
     /*--- Clear the stored adjoint information to be ready for a new evaluation. ---*/
 
@@ -439,15 +447,11 @@ void CDiscAdjSinglezoneDriver::SecondaryRecording(){
   /*--- Extract the computed sensitivity values. ---*/
 
   if (SecondaryVariables == RECORDING::MESH_COORDS) {
-    if(config->GetInvProblem()) {
-      solver[MainSolver]->GetModelParametersSensitivity();
-    }
-    else {
       solver[MainSolver]->SetSensitivity(geometry, config);
     }
     // solver[MainSolver]->SetSensitivity(geometry, config);
     // solver[ADJFLOW_SOL]->GetModelParametersSensitivity();
-  }
+  
   else { // MESH_DEFORM
     solver[ADJMESH_SOL]->SetSensitivity(geometry, config, solver[MainSolver]);
   }

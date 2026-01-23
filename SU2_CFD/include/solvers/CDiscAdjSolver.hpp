@@ -63,6 +63,8 @@ protected:
 
   CDiscAdjVariable* nodes = nullptr;  /*!< \brief The highest level in the variable hierarchy this solver can safely use. */
 
+  vector<su2double> ModelDiscrepancyGradient; /*!< \brief Gradient of the model discrepancy for inverse problems. */
+  su2double ModelDiscrepancyGradientNorm; /*!< \brief Norm of the model discrepancy gradient for inverse problems. */
   /*!
    * \brief Return nodes to allow CSolver::base_nodes to be set.
    */
@@ -104,9 +106,23 @@ public:
    * \param[in] config - Definition of the particular problem.
    * \param[in] reset - If true reset variables to their initial values.
    */
-  void RegisterModelParameter(CGeometry* geometry, CConfig* config, bool reset) override;
+  void RegisterModelParameters(CGeometry* geometry, CConfig* config, bool reset) override;
 
-  void GetModelParametersSensitivity() override;
+  const vector<su2double> GetModelParametersGradient() override { return ModelDiscrepancyGradient; }
+
+  const su2double GetModelParametersGradientNorm() override { return ModelDiscrepancyGradientNorm; }
+
+  void SetModelParametersGradient(const vector<su2double>& val_vec) override { 
+
+    ModelDiscrepancyGradient = val_vec; 
+    su2double GradientNorm = 0.0; 
+    for (auto val : val_vec) { 
+      GradientNorm += val * val; 
+    } 
+    ModelDiscrepancyGradientNorm = sqrt(GradientNorm); 
+  }
+  
+  void ComputeModelParametersGradient() override;
 
   /*!
    * \brief Performs the preprocessing of the adjoint AD-based solver.

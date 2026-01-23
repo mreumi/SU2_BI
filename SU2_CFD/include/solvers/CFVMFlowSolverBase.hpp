@@ -183,7 +183,8 @@ class CFVMFlowSolverBase : public CSolver {
   vector<vector<su2double> > CPressure;         /*!< \brief Pressure coefficient for each boundary and vertex. */
   vector<vector<su2double> > CPressureTarget;   /*!< \brief Target Pressure coefficient for each boundary and vertex. */
 
-  CDatapointcloud InverseProblemTargetData;
+  CMeshPointCloud InverseProblemTargetVelocityData; /*!< \brief Target velocity data for inverse problem. */
+  vector<su2double> InverseProblemTargetDistanceOnMesh; /*!< \brief Target distance field for inverse problem. */
 
   //vector<vector<su2double> > ModelPrediction;              /*!< \brief Pressure coefficient for each boundary and vertex. */
   //vector<vector<su2double> > ModelPredictionTarget;        /*!< \brief Target X velocity for each boundary and vertex. */
@@ -2021,6 +2022,8 @@ class CFVMFlowSolverBase : public CSolver {
    */
   inline void SetTotal_ModelDiscrepancy(su2double val_discrepancy) final { Total_ModelDiscrepancy = val_discrepancy; }
 
+  inline su2double GetTotal_ModelDiscrepancy() const final { return Total_ModelDiscrepancy; }
+  
   /*!
    * \brief Set the value of the Equivalent Area coefficient.
    * \param[in] val_cequivarea - Value of the Equivalent Area coefficient.
@@ -2127,8 +2130,12 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline CDatapointcloud GetInverseProblemTargetData() const final {
-    return InverseProblemTargetData;
+  inline CMeshPointCloud GetInverseProblemTargetVelocityData() const final {
+    return InverseProblemTargetVelocityData;
+  }
+
+  inline std::vector<su2double> GetInverseProblemTargetDistanceOnMesh() const override {
+    return InverseProblemTargetDistanceOnMesh;
   }
 
   /*!
@@ -2137,8 +2144,12 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Value of the pressure coefficient.
    */
-  inline void SetInverseProblemTargetData(const CDatapointcloud& data) final {
-        InverseProblemTargetData = data;
+  inline void SetInverseProblemTargetVelocityData(const CMeshPointCloud& data) final {
+        InverseProblemTargetVelocityData = data;
+  }
+
+  void SetInverseProblemTargetDistanceOnMesh(const std::vector<su2double>& v) override {
+    InverseProblemTargetDistanceOnMesh = v;
   }
 
   /*!

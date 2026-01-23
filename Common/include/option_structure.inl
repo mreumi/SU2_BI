@@ -655,7 +655,7 @@ class COptionDVParam : public COptionBase {
         case ROTATE_GRID:
           nParamDV[iDV] = 6;
           break;
-        case IP_VISCOSITY:
+        case INV_PROBLEM:
           nParamDV[iDV] = 0;
           break;
         default: {

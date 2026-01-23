@@ -412,6 +412,11 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       kind_recording == RECORDING::TAG_CHECK_SOLVER_AND_MESH ||
       kind_recording == RECORDING::SOLUTION_AND_MESH) {
 
+      /*--- Register model parameters as input ---*/
+      if(config[iZone]->GetInvProblem()) {
+        solvers0[ADJFLOW_SOL]->RegisterModelParameters(geometry0, config[iZone]);
+      }
+
     /*--- Register flow and turbulent variables as input ---*/
 
     if (config[iZone]->GetFluidProblem()) {
@@ -441,13 +446,7 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       kind_recording == RECORDING::TAG_INIT_SOLVER_AND_MESH ||
       kind_recording == RECORDING::TAG_CHECK_SOLVER_AND_MESH) {
 
-    /*--- Register node coordinates as input ---*/
-    if(config[iZone]->GetInvProblem()) {
-      solvers0[ADJFLOW_SOL]->RegisterModelParameter(geometry0, config[iZone]);
-    }
-    else {
-        geometry0->RegisterCoordinates();
-    }
+      geometry0->RegisterCoordinates();
     }
 
   if (kind_recording == RECORDING::MESH_DEFORM) {

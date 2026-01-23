@@ -360,7 +360,6 @@ void CIncNSSolver::BC_Wall_Generic(const CGeometry *geometry, const CConfig *con
       break;
     case ISOTHERMAL:
       Twall = config->GetIsothermal_Temperature(Marker_Tag) / config->GetTemperature_Ref();
-      std::cout << "--------------------- Setting isothermal wall temperature on Marker " << Marker_Tag << " to " << Twall << std::endl;
       break;
     case HEAT_TRANSFER:
       Transfer_Coefficient = config->GetWall_HeatTransfer_Coefficient(Marker_Tag) * config->GetTemperature_Ref() /

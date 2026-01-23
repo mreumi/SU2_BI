@@ -232,7 +232,8 @@ private:
   su2double Inlet_Matching_Tol; /*!< \brief Tolerance used when matching a point to a point from the inlet file. */
   string ActDisk_FileName;      /*!< \brief Filename specifying an actuator disk. */
 
-  string Targetdata_Filename;    /*!< \brief Filename specifying an target data file. */
+  string TargetVelocityData_Filename;  /*!< \brief Filename specifying an target data file. */
+  string TargetDistanceField_Filename; /*!< \brief Filename specifying a target distance field file e.g. for flame location. */
 
   string *Marker_Euler,           /*!< \brief Euler wall markers. */
   *Marker_FarField,               /*!< \brief Far field markers. */
@@ -1271,6 +1272,11 @@ private:
   unsigned short nIP_Parameters;  /*!< \brief Number of IP parameters. */
   string* IP_Parameters;          /*!< \brief name of IP parameters. */
 
+  /*--- Isothermal temperature correction options to register them for inverse problems ---*/
+  mutable std::unordered_map<std::string, su2double> IsoTemp_Correction_AD_;
+  mutable std::unordered_map<std::string, int>       IsoTemp_Correction_Index_;
+  mutable std::unordered_map<std::string, bool>      IsoTemp_Correction_Registered_;
+
   /*--- Additional flamelet solver options ---*/
   FluidFlamelet_ParsedOptions flamelet_ParsedOptions; /*!< \brief Additional flamelet solver options */
 
@@ -1726,6 +1732,12 @@ public:
    * \return Value of the constant: Temperature
    */
   su2double GetWallTemperature(void) const { return Wall_Temperature; }
+
+  su2double& GetIsothermal_TemperatureCorrectionRef(const std::string& marker) const;
+  bool IsIsothermalTempCorrectionRegistered(const std::string& marker) const;
+  int  GetIsothermalTempCorrectionIndex(const std::string& marker) const;
+  void SetIsothermalTempCorrectionRegistered(const std::string& marker, int idx) const;
+
 
     /*!
    * \brief Get the p-norm for heat-flux objective functions (adjoint problem).
@@ -5764,8 +5776,9 @@ public:
    */
   string GetVolume_FileName(void) const { return Volume_FileName; }
 
-  string GetTargetfilename(void) const { return Targetdata_Filename; }
+  string GetTargetVelocityData_FileName(void) const { return TargetVelocityData_Filename; }
   
+  string GetTargetDistanceField_Filename(void) const { return TargetDistanceField_Filename; }
   /*!
    * \brief Add any numbers necessary to the filename (iteration number, zone ID ...)
    * \param[in] filename - the base filename.

@@ -2299,7 +2299,7 @@ enum ENUM_PARAM {
   ROTATE_GRID = 51,           /*!< \brief Rotate the volume grid */
   SCALE_GRID = 52,            /*!< \brief Scale the volume grid. */
   ANGLE_OF_ATTACK = 101,      /*!< \brief Angle of attack for airfoils. */
-  IP_VISCOSITY = 102          /*!< \brief Viscosity for inverse problems. */
+  INV_PROBLEM = 102          /*!< \brief Viscosity for inverse problems. */
 };
 static const MapType<std::string, ENUM_PARAM> Param_Map = {
   MakePair("FFD_SETTING", FFD_SETTING)
@@ -2336,7 +2336,7 @@ static const MapType<std::string, ENUM_PARAM> Param_Map = {
   MakePair("TRANSLATE_GRID", TRANSLATE_GRID)
   MakePair("ROTATE_GRID", ROTATE_GRID)
   MakePair("SCALE_GRID", SCALE_GRID)
-  MakePair("IP_VISCOSITY", IP_VISCOSITY)
+  MakePair("INV_PROBLEM", INV_PROBLEM)
 };
 
 /*!

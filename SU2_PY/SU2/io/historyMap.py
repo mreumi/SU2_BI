@@ -431,6 +431,12 @@ history_header_map = {
         "HEADER": "d[Cp_Diff]",
         "TYPE": "D_COEFFICIENT",
     },
+    "D_INVERSE_PROBLEM_MODEL_DISCREPANCY": {
+        "DESCRIPTION": "Derivative value",
+        "GROUP": "D_INVERSE_PROBLEM",
+        "HEADER": "d[Model_Disc]",
+        "TYPE": "D_COEFFICIENT",
+    },
     "D_LIFT": {
         "DESCRIPTION": "Derivative value",
         "GROUP": "D_AERO_COEFF",
@@ -681,10 +687,10 @@ history_header_map = {
         "HEADER": "Cp_Diff",
         "TYPE": "COEFFICIENT",
     },
-    "INVERSE_PROBLEM": {
+    "INVERSE_PROBLEM_MODEL_DISCREPANCY": {
         "DESCRIPTION": "Model discrepancy for inverse problem",
-        "GROUP": "MODEL_DISCREPANCY",
-        "HEADER": "MODEL_DISCREPANCY",
+        "GROUP": "INVERSE_PROBLEM",
+        "HEADER": "Model_Disc",
         "TYPE": "COEFFICIENT",
     },
     "LIFT": {

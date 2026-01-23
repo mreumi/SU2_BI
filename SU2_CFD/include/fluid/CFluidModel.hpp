@@ -92,8 +92,36 @@ class CFluidModel {
    */
   static unique_ptr<CDiffusivityModel> MakeMassDiffusivityModel(const CConfig* config, unsigned short iSpecies);
 
+
+  // variables for IP parameter registration
+  unordered_map<string, su2double> Twall_AD_;  /*!< \brief AD variables for isothermal wall temperatures, keyed by marker name. */
+  unordered_map<string, int> Twall_index_;      /*!< \brief AD indices for isothermal wall temperatures, keyed by marker name. */
  public:
   virtual ~CFluidModel() {}
+
+    
+  // Helper functions for parsing IP parameter tokens
+  static inline bool HasKeyValueDash(const std::string& token,
+                                    const std::string& key) {
+    const std::string prefix = key + "-";
+    return token.rfind(prefix, 0) == 0 && token.size() > prefix.size();
+  }
+
+  static inline std::string ExtractKeyValueDash(const std::string& token,
+                                                const std::string& key) {
+    const std::string prefix = key + "-";
+    if (!HasKeyValueDash(token, key)) return std::string();
+    return token.substr(prefix.size());
+  }
+
+
+  // Trim whitespace from calls like ISOTHERMAL_TEMPERATURE( wall1 )
+  inline std::string Trim(const std::string& s) {
+    const auto b = s.find_first_not_of(" \t\n\r");
+    if (b == std::string::npos) return "";
+    const auto e = s.find_last_not_of(" \t\n\r");
+    return s.substr(b, e - b + 1);
+  }
 
   inline vector<int> RegisterCustomValues (const CConfig* config) { 
 
@@ -107,13 +135,13 @@ class CFluidModel {
     unordered_map<string, int> name_to_index;   // avoid duplicates by name
     int index = 0; // starting AD index (would be better to get from outside?)
 
-    
+    // Go through all requested IP parameters and register them
     for (unsigned short i=0; i<n_IPpars; i++) {
-      const string& ip_par_name = ip_pars[i];
-      std::cout << ">>> IP parameter: " << i << ": " << ip_par_name << std::endl;
+      // token defines the parameter to register
+      const string& token = ip_pars[i];
         
-      // If we have seen it, reuse the same index (do NOT register again)
-      auto it = name_to_index.find(ip_par_name);
+      // If we have seen it, reuse the same index (do not register again)
+      auto it = name_to_index.find(token);
       if (it != name_to_index.end()) {
         indices.push_back(it->second);
         continue;
@@ -122,18 +150,52 @@ class CFluidModel {
       // First time seeing this parameter: register it
       int idx = -1;
 
-      if (ip_par_name == "VISCOSITY") {
+      if (token == "VISCOSITY") {
         idx = LaminarViscosity->RegisterViscosity(index);
-      } else {
-        std::cout << "Warning: Unknown IP parameter '" << ip_par_name << "' (skipping)\n";
-        indices.push_back(-1); // marks invalid parameters. idx>0 will be checked later
+      } 
+      else if (HasKeyValueDash(token, "ISOTHERMAL_TEMPERATURE")) {
+        const std::string marker = Trim(ExtractKeyValueDash(token, "ISOTHERMAL_TEMPERATURE"));
+        idx = RegisterIsothermalWallTemp(marker, config, index);
+      }
+      else {
+        std::cout << "/!\\ Warning: Unknown IP parameter '" << token << "' (skipping)\n";
       }
 
-      name_to_index[ip_par_name] = idx;
+      name_to_index[token] = idx;
       indices.push_back(idx);
     }
     return indices;
   }
+  
+inline int RegisterIsothermalWallTemp(const std::string& marker,
+                                    const CConfig* config,
+                                    int& index) {
+
+  // Check if registered. If yes, return existing index
+  if (config->IsIsothermalTempCorrectionRegistered(marker)) {
+    return config->GetIsothermalTempCorrectionIndex(marker);
+  }
+
+  // Register a correction variable (not the base temperature)
+  su2double& Tcor = config->GetIsothermal_TemperatureCorrectionRef(marker);
+  Tcor = 0.0; // baseline: no correction unless optimizer changes it
+
+  AD::RegisterInput(Tcor);
+  AD::SetIndex(index, Tcor);
+
+  const int assigned = index;
+  config->SetIsothermalTempCorrectionRegistered(marker, assigned);
+
+  std::cout << "[ISO-REG] stored key='" << marker << "'"
+          << " registered=1"
+          << " idx=" << assigned
+          << std::endl;
+
+  ++index; // should be index++ ?!?! or just index 
+
+  return assigned;
+}
+
   /*!
    * \brief Get fluid pressure.
    */

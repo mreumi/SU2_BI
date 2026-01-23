@@ -32,6 +32,10 @@
 #include <iomanip>
 #include <utility>
 #include <vector>
+#include <cmath> // std::isnan
+#include <limits>
+#include <algorithm>
+#include <unordered_map>
 
 #include "../../include/output/CFlowOutput.hpp"
 
@@ -41,8 +45,10 @@
 #include "../../include/variables/CPrimitiveIndices.hpp"
 #include "../../include/fluid/CCoolProp.hpp"
 
-#include "../../include/output/CDatapointcloud.hpp"
-#include "../../include/output/CInterpolator.hpp"
+#include "../../include/output/CMeshPointCloud.hpp"
+//#include "../../include/output/CInterpolator.hpp"
+#include "../../include/output/CKdtree.hpp"
+#include "../../include/fluid/CFluidFlamelet.hpp"
 
 CFlowOutput::CFlowOutput(const CConfig *config, unsigned short nDim, bool fem_output) :
   CFVMOutput(config, nDim, fem_output),
@@ -1920,184 +1926,682 @@ void CFlowOutput::SetCpInverseDesign(CSolver *solver, const CGeometry *geometry,
   std::cout<<"   Cp Difference = "<<PressDiff<<std::endl;
 }
 
-std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>> readTargetData(const std::string& target_filename, int nDim) {
-  std::cout<<"Reading target file: "<<target_filename<<'\n';
-  // TODO: store data in the class so that we don't have to read it every time
-  
-  string text_line;
-  ifstream Surface_file;
+//// START INVERSE PROBLEM FUNCTIONS 
+std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>> readTargetData(const std::string& target_filename,
+                                                                                                    int nDim,
+                                                                                                    int nValCols) {
 
-  Surface_file.open(target_filename);
+  std::cout << "Reading target file: " << target_filename << '\n';
 
-  // skip header line
-  getline(Surface_file, text_line);
+  std::ifstream Surface_file(target_filename);
+  if (!Surface_file.good()) {
+    throw std::runtime_error("Could not open target file: " + target_filename);
+  }
 
-  std::vector<std::vector<su2double>> target_coordinates, target_values; // to keep track of points read from file
-  auto NaN = std::numeric_limits<su2double>::quiet_NaN(); // use to initialize target values which are not set
+  std::string text_line;
 
-  while (getline(Surface_file, text_line)) {
-    // parse line for each target point
-    std::vector<su2double> target_point_coords;
-    std::vector<su2double> target_point_vals;
+  // skip exactly one header line
+  std::getline(Surface_file, text_line);
 
-    /*--- remove commas ---*/
+  std::vector<std::vector<su2double>> target_coordinates;
+  std::vector<std::vector<su2double>> target_values;
+
+  const auto NaN = std::numeric_limits<su2double>::quiet_NaN();
+
+  // helper function to read a double or NaN token
+  auto readDoubleOrNaN = [&](std::istream& is, su2double& out) {
+    if (is >> out) return;
+
+    is.clear();
+    std::string tok;
+    if (!(is >> tok)) {
+      throw std::runtime_error("Unexpected end of line while reading target file.");
+    }
+
+    std::string t = tok;
+    std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+    if (t == "nan") {
+      out = NaN;
+      return;
+    }
+
+    throw std::runtime_error("Error reading target value from file: " + tok);
+  };
+
+  std::size_t line_no = 1; // header is line 1
+
+  while (std::getline(Surface_file, text_line)) {
+    ++line_no;
+
+    if (text_line.empty()) continue;
+
+    // remove commas
     for (auto& c : text_line) if (c == ',') c = ' ';
-    stringstream point_line(text_line);
+    std::stringstream point_line(text_line);
 
-    /*--- parse line ---*/
-    su2double XCoord, YCoord, ZCoord=0;
-    su2double TargetValueX = NaN, TargetValueY = NaN, TargetValueZ = NaN;
+    su2double XCoord = 0.0, YCoord = 0.0, ZCoord = 0.0;
 
-    // lambda to read a double or set to NaN if not possible
-    auto readDoubleOrNaN = [&](std::istream& is, su2double& out) {
-        if (is >> out) return;
+    // read coordinates
+    std::vector<su2double> target_point_coords;
 
-        is.clear();
-        std::string tok;
-        if (!(is >> tok)) { out = NaN; return; }
+    if (!(point_line >> XCoord >> YCoord)) {
+      throw std::runtime_error("Failed to read X/Y coordinates in target file at line " + std::to_string(line_no));
+    }
 
-        std::string t = tok;
-        std::transform(t.begin(), t.end(), t.begin(), ::tolower);
-        if (t == "nan") { out = NaN; return; }
-        throw std::runtime_error("Error reading target value from file: " + tok);
-    };
-
-    // read point coordinates
-    point_line >> XCoord >> YCoord;
     if (nDim == 3) {
-      point_line >> ZCoord;
+      if (!(point_line >> ZCoord)) {
+        throw std::runtime_error("3D run but missing Z coordinate in target file at line " + std::to_string(line_no));
+      }
       target_point_coords = {XCoord, YCoord, ZCoord};
     } else {
       target_point_coords = {XCoord, YCoord};
     }
 
-    // read target values
-    readDoubleOrNaN(point_line, TargetValueX);
-    readDoubleOrNaN(point_line, TargetValueY);
-    if (nDim == 3) {
-      readDoubleOrNaN(point_line, TargetValueZ);
-      target_point_vals = {TargetValueX, TargetValueY, TargetValueZ};
-    } else {
-      target_point_vals = {TargetValueX, TargetValueY};
+    // read exactly nValCols target values
+    std::vector<su2double> target_point_vals(static_cast<std::size_t>(nValCols), NaN);
+    for (int j = 0; j < nValCols; ++j) {
+      readDoubleOrNaN(point_line, target_point_vals[static_cast<std::size_t>(j)]);
     }
 
-    // append to lists of target coordinates and values
-    target_coordinates.push_back(target_point_coords);
-    target_values.push_back(target_point_vals);
+    // Ensure there are no extra non-whitespace tokens (strict format)
+    std::string extra;
+    if (point_line >> extra) {
+      throw std::runtime_error("Too many entries in target file at line " + std::to_string(line_no));
+    }
+
+    target_coordinates.push_back(std::move(target_point_coords));
+    target_values.push_back(std::move(target_point_vals));
   }
-  Surface_file.close();
+
   return {target_coordinates, target_values};
-  } 
+}
+
+static std::vector<su2double> InterpolateScalarTargetToMeshNodes(const CMeshPointCloud& target_pc, const CGeometry* geometry, int nDim) {
+  // function to interpolate scalar field defined at target points to mesh nodes
+
+  const int localN = geometry->GetnPointDomain();
+
+  // If no target points, return empty so the residual block can be empty
+  if (target_pc.points.empty()) {
+    return std::vector<su2double>{};  // empty indicates "no contribution"
+  }
+
+  // Build KDTree on target points (they carry the scalar field in values[0])
+  CKDTree target_tree;
+  target_tree.build(target_pc.points);
+
+  std::vector<su2double> scalar_on_mesh(localN, 0.0);
+
+  const auto k = static_cast<std::size_t>(nDim + 1);
+
+  for (int i = 0; i < localN; ++i) {
+
+    // Get coordinates of SU2 node i (local domain indexing)
+    std::vector<su2double> x;
+    x.reserve(static_cast<std::size_t>(nDim));
+    x.push_back(geometry->nodes->GetCoord(i, 0));
+    x.push_back(geometry->nodes->GetCoord(i, 1));
+    if (nDim == 3) x.push_back(geometry->nodes->GetCoord(i, 2));
+
+    // Query point and get kNN in target set
+    CMeshPoint q(x, {}); // no values needed for query
+    auto hits = target_tree.kNearestWithDist2(q, k);
+
+    // if (hits.empty()) {
+    //   scalar_on_mesh[i] = 0.0; continue;
+    // }
+
+    su2double num = 0.0;
+    su2double den = 0.0;
+
+    for (const auto& h : hits) {
+      const su2double d2 = h.d2;
+      const su2double val = h.point->values[0];
+
+      if (d2 == 0.0) {        // exact match
+        num = val;
+        den = 1.0;
+        break;
+      }
+
+      const su2double w = 1.0 / d2;  // power=2 IDW
+      num += w * val;
+      den += w;
+    }
+
+    scalar_on_mesh[i] = (den > 0.0) ? (num / den) : su2double(0.0);
+  }
+  return scalar_on_mesh;
+}
+
 
 void CFlowOutput::AddInverseProblemOutput(){
 
-  AddHistoryOutput("INVERSE_PROBLEM", "MODEL_DISCREPANCY", ScreenOutputFormat::FIXED, "MODEL_DISCREPANCY", "Model discrepancy for inverse design", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("INVERSE_PROBLEM_TOTAL_MODEL_DISCREPANCY", "Mdl_Disc_Tot", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Total model discrepancy for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("INVERSE_PROBLEM_VELOCITY_MODEL_DISCREPANCY", "Mdl_Disc_Vel", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Model discrepancy in terms of velocity target for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("INVERSE_PROBLEM_FLAME_MODEL_DISCREPANCY", "Mdl_Disc_Flame", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Model discrepancy in terms of flame target location for inverse problem", HistoryFieldType::COEFFICIENT);
+
 }
 
-void CFlowOutput::SetInverseProblem(CSolver *solver, const CGeometry *geometry, const CConfig *config){
-  
-  // Create a list of all points in the domain for interpolation
-  
-  // Get the local number of points on this processor
-  int localNumberofpoints   = geometry->GetnPointDomain();
-  int globalNumberofpoints  = 0;
+static CMeshPointCloud BuildLocalVelocityPointCloud(const CSolver* solver,
+                                                    const CGeometry* geometry,
+                                                    int nDim) {
+  const int localN = geometry->GetnPointDomain(); // local number of points without halo
 
-  std::vector<std::vector<su2double>> mesh_coordinates, predicted_values;
+  std::vector<std::vector<su2double>> coords;
+  std::vector<std::vector<su2double>> vals;
+  coords.reserve(localN);
+  vals.reserve(localN);
 
-  // Reserve memory for the vectors based on the number of points in the local process
-  mesh_coordinates.reserve(localNumberofpoints);  // reserve space for coordinates
-  predicted_values.reserve(localNumberofpoints);  // reserve space for predicted values (e.g., velocities)
-
-  // Populate the local points and associated values
-  for (int i = 0; i < localNumberofpoints; i++) {
-    std::vector<su2double> point_coords;
-    std::vector<su2double> predicted_vals;
+  for (int i = 0; i < localN; ++i) {
     if (nDim == 3) {
-      point_coords = {geometry->nodes->GetCoord(i, 0), geometry->nodes->GetCoord(i, 1), geometry->nodes->GetCoord(i, 2)};
-      predicted_vals = {solver->GetNodes()->GetVelocity(i, 0), solver->GetNodes()->GetVelocity(i, 1), solver->GetNodes()->GetVelocity(i, 2)};
+      coords.push_back({ geometry->nodes->GetCoord(i,0),
+                         geometry->nodes->GetCoord(i,1),
+                         geometry->nodes->GetCoord(i,2) });
+      vals.push_back({ solver->GetNodes()->GetVelocity(i,0),
+                       solver->GetNodes()->GetVelocity(i,1),
+                       solver->GetNodes()->GetVelocity(i,2) });
     } else {
-      point_coords = {geometry->nodes->GetCoord(i, 0), geometry->nodes->GetCoord(i, 1)};
-      predicted_vals = {solver->GetNodes()->GetVelocity(i, 0), solver->GetNodes()->GetVelocity(i, 1)};
+      coords.push_back({ geometry->nodes->GetCoord(i,0),
+                         geometry->nodes->GetCoord(i,1) });
+      vals.push_back({ solver->GetNodes()->GetVelocity(i,0),
+                       solver->GetNodes()->GetVelocity(i,1) });
     }
-    mesh_coordinates.push_back(point_coords);
-    predicted_values.push_back(predicted_vals);
   }
-  CDatapointcloud mesh_pointcloud(mesh_coordinates, predicted_values);
-
-  // Get target data, on first iterations or in dic. adjoint read it from file (and set to var) afterwards, just get the var
-  if ((config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint()) {
-
-    // Get the target file from the cfg
-    const auto target_filename = config->GetTargetfilename();
-    std::ifstream Surface_file;
-
-    // Check if the target file exists
-    if (!Surface_file.good()) {
-      std::cout<<"File not found, skipping model discrepancy calculation."<<'\n';
-      solver->SetTotal_ModelDiscrepancy(0.0);
-      SetHistoryOutputValue("INVERSE_PROBLEM", 0.0);
-      return;
-    }
-    // Read target data from file and store target points
-    auto [target_coordinates, target_values] = readTargetData(target_filename, nDim);
-    CDatapointcloud input_target_pointcloud(target_coordinates, target_values);
-    solver->SetInverseProblemTargetData(input_target_pointcloud);
-  } 
-  CDatapointcloud target_pointcloud = solver->GetInverseProblemTargetData();
-  
-  // Create the interpolator
-  // TODO: Make the power and method configurable from the cfg
-  std::size_t k       = 3;
-  su2double power     = 2.0;
-  std::string method  = "IDW";
-
-  Interpolator my_interpolator(k, power, method);
-  CDatapointcloud target_predictions = my_interpolator.interpolate(mesh_pointcloud, target_pointcloud);
-
-  // Compute the model discrepancy
-  su2double Model_discrepancy = 0.0;
-  int n_points = 0;
-
-  for (std::size_t i = 0; i < target_pointcloud.size(); ++i) {
-      const auto& target_point_coords = target_pointcloud.points[i].coords;
-      const auto& target_point_values = target_pointcloud.points[i].values;
-      const auto& predicted_vals      = target_predictions.points[i].values;
-
-      // Check if target value is set (not NaN)
-      if (!std::isnan(target_point_values[0])) { // X velocity target
-          su2double diff_x = predicted_vals[0] - target_point_values[0];
-          Model_discrepancy += diff_x * diff_x;
-          n_points++;
-      }
-      if (!std::isnan(target_point_values[1])) { // Y velocity target
-          su2double diff_y = predicted_vals[1] - target_point_values[1];
-          Model_discrepancy += diff_y * diff_y;
-          n_points++;
-      }
-      if (nDim == 3 && !std::isnan(target_point_values[2])) { // Z velocity target
-          su2double diff_z = predicted_vals[2] - target_point_values[2];
-          Model_discrepancy += diff_z * diff_z;
-          n_points++;
-      }
-  }
-  //std::cout<<"Considered number of target values for model discrepancy on this rank: "<<n_points<<'\n';
-
-  su2double tmp = Model_discrepancy;
-  SU2_MPI::Allreduce(&tmp, &Model_discrepancy, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
-
-  // Update the total model discrepancy
-  solver->SetTotal_ModelDiscrepancy(Model_discrepancy);
-  SetHistoryOutputValue("INVERSE_PROBLEM", Model_discrepancy);
-
-  // Write value to file and to screen
-  ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
-  // TODO: make MPI-suitable
-  ModelDiscrepancyStream << std::setprecision(12) << Model_discrepancy << '\n';
-  ModelDiscrepancyStream.close();
-  //std::cout<<"Model Discrepancy = "<<Model_discrepancy<<'\n';
-
-  //}
+  CMeshPointCloud mesh_pointcloud(coords, vals);
+  return mesh_pointcloud;
 }
+
+static CMeshPointCloud GetVelocityTargetPointCloud(CSolver* solver, const CConfig* config, int nDim) {
+  const bool should_read = (config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint();
+
+  if (should_read) {
+    const auto target_filename = config->GetTargetVelocityData_FileName();
+    std::ifstream f(target_filename);
+
+    if (!f.good()) {
+      // Cache an empty point cloud so downstream is consistent
+      solver->SetInverseProblemTargetVelocityData(CMeshPointCloud({}, {}));
+      if (SU2_MPI::GetRank() == 0) {
+        std::cout << "Velocity target file not found (or empty). Continuing with empty velocity residual.\n";
+      }
+    }
+    else {
+      auto [coords, vals] = readTargetData(target_filename, nDim, nDim);
+      solver->SetInverseProblemTargetVelocityData(CMeshPointCloud(coords, vals));
+    }
+  }
+  return solver->GetInverseProblemTargetVelocityData();
+}
+
+static CMeshPointCloud InterpolateFieldToPointsMPI(const CKDTree& local_mesh_tree,
+                                                const CMeshPointCloud& query_cloud,
+                                                const int nVar,
+                                                const int k) {
+// brief: Interpolate field defined at local mesh points to query points using MPI-aware kNN + IDW. Inputs:
+//        local_mesh_tree:  KDTree built on local mesh points (with field values)
+//        query_cloud:      point cloud of query points (no field values needed)
+//        nVar:             number of field variables per mesh point to interpolate
+//        k:                number of nearest neighbors to consider
+
+  const int comm_size = SU2_MPI::GetSize();       // number of MPI ranks
+  const int recLen    = 1 + nVar;                 // number of su2double per neighbour, distance + nVar values
+  const int sendCount = k * recLen;               // number of su2double to send per rank
+
+  std::vector<su2double> sendbuf(sendCount, 0.0);             // send buffer for local kNN results
+  std::vector<su2double> recvbuf(sendCount * comm_size, 0.0); // receive buffer for all ranks' kNN results
+
+  CMeshPointCloud output_cloud;
+  output_cloud.points.reserve(query_cloud.points.size());
+
+  std::vector<su2double> vals(nVar, 0.0);
+
+  for (const auto& q : query_cloud.points) {
+    // find local kNN and store distances + values in sendbuf
+    auto local_hits = local_mesh_tree.kNearestWithDist2(q, static_cast<std::size_t>(k));
+
+    for (int i = 0; i < k; ++i) {
+      su2double* rec = &sendbuf[i * recLen];
+
+      if (i < static_cast<int>(local_hits.size())) { // if k neighbors found
+        rec[0] = local_hits[i].d2;
+        const auto& v = local_hits[i].point->values;
+        for (int j = 0; j < nVar; ++j) rec[1 + j] = v[j];
+      } else { // pad with infinite distance (i.e. ignore in IDW) if not
+        rec[0] = std::numeric_limits<su2double>::infinity();
+        for (int j = 0; j < nVar; ++j) rec[1 + j] = 0.0;
+      }
+    }
+
+    SU2_MPI::Allgather(sendbuf.data(), sendCount, MPI_DOUBLE,
+                       recvbuf.data(), sendCount, MPI_DOUBLE,
+                       SU2_MPI::GetComm());
+
+    // from neighbours found on all nodes, pick best global k candidates and do IDW
+    // (fast: just compute weights from all received candidates)
+    std::fill(vals.begin(), vals.end(), 0.0);
+    su2double wsum = 0.0;
+    bool exact_hit = false;
+
+    for (std::size_t r = 0; r < comm_size && !exact_hit; ++r) {
+      for (int i = 0; i < k; ++i) {
+        const su2double* rec = &recvbuf[(r * k + i) * recLen];
+        const su2double d2 = rec[0];
+        if (!std::isfinite(d2)) continue;
+
+        // weight: 1/(d2+eps) ; handle exact hit
+        const su2double eps = 1e-30;
+        if (d2 < eps) {
+          // exact node match: take directly and skip others
+          for (int j = 0; j < nVar; ++j) vals[j] = rec[1 + j];
+          wsum = 1.0;
+          exact_hit = true; // break outer loops
+          break;
+        }
+
+        const su2double w = 1.0 / (d2 + eps);
+        wsum += w;
+        for (int j = 0; j < nVar; ++j) vals[j] += w * rec[1 + j];
+      }
+    }
+
+    if (wsum > 0.0) {
+      for (int j = 0; j < nVar; ++j) vals[j] /= wsum;
+    }
+
+    // emit point
+    CMeshPoint p = q;          // copy coords
+    p.values = vals;           // interpolated values
+    output_cloud.points.push_back(std::move(p));
+  }
+
+  return output_cloud;
+}
+
+
+static CMeshPointCloud InterpolateFieldToPointsLocal(const CKDTree& tree,
+                                                     const CMeshPointCloud& query_cloud,
+                                                     int nVar, 
+                                                     int k) {
+  CMeshPointCloud out;
+  out.points.reserve(query_cloud.points.size());
+
+  const su2double eps = 1e-30;
+
+  for (const auto& q : query_cloud.points) {
+    auto hits = tree.kNearestWithDist2(q, static_cast<std::size_t>(k));
+
+    std::vector<su2double> v(nVar, 0.0);
+    su2double wsum = 0.0;
+
+    for (const auto& h : hits) {
+      const su2double d2 = h.d2;
+      if (d2 < eps) { v = h.point->values; wsum = 1.0; break; }
+      const su2double w = 1.0 / (d2 + eps);
+      wsum += w;
+      for (int j = 0; j < nVar; ++j) v[j] += w * h.point->values[j];
+    }
+
+    if (wsum > 0.0)
+      for (int j = 0; j < nVar; ++j) v[j] /= wsum;
+
+    CMeshPoint p = q;            // copy coords
+    p.values = std::move(v);     // set interpolated values
+    out.points.push_back(std::move(p));
+  }
+
+  return out;
+}
+
+static CMeshPointCloud InterpolateMeshFieldToTarget(const CMeshPointCloud& mesh_cloud,
+                                                    const CMeshPointCloud& target_cloud,
+                                                    int nVar,
+                                                    int nDim)
+{
+// Interpolate field: (mesh points, values) contained in mesh_cloud to (target points) contained in target_cloud using MPI-aware kNN 
+  CKDTree mesh_tree;
+  mesh_tree.build(mesh_cloud.points);
+  return InterpolateFieldToPointsMPI(mesh_tree, target_cloud, nVar, /*k=*/nDim+1);
+}
+
+static CMeshPointCloud InterpolateTargetFieldToMesh(const CMeshPointCloud& target_cloud,
+                                                    const CMeshPointCloud& mesh_cloud,
+                                                    int nVar,
+                                                    int nDim)
+{
+// Interpolate field: (target points, values) contained in target_cloud to (mesh points) contained in mesh_cloud using local kNN
+  CKDTree target_tree;
+  target_tree.build(target_cloud.points);
+  return InterpolateFieldToPointsLocal(target_tree, mesh_cloud, nVar, /*k=*/nDim+1);
+}
+
+
+static std::vector<su2double> BuildVelocityResidualVector(const CMeshPointCloud& target_cloud, const CMeshPointCloud& pred_on_target, int nDim) {
+  // Build residual vector between target and predicted velocities, z-s(a)
+
+  std::vector<su2double> d;
+  const std::size_t N = std::min(target_cloud.points.size(), pred_on_target.points.size());
+  d.reserve(N * static_cast<std::size_t>(nDim));
+
+  for (std::size_t i = 0; i < N; ++i) {
+    const auto& z = target_cloud.points[i].values;
+    const auto& s = pred_on_target.points[i].values;
+
+    if (z.size() < static_cast<std::size_t>(nDim) || s.size() < static_cast<std::size_t>(nDim))
+      continue;
+
+    for (int j = 0; j < nDim; ++j) {
+      if (std::isnan(z[j])) continue;
+      d.push_back(z[j] - s[j]); 
+    }
+  }
+  return d;
+}
+
+static su2double QuadraticFormIdentity(const std::vector<su2double>& d) { // can be replaced with more general form with covariance later
+  su2double acc = 0.0;
+  for (auto di : d) acc += di * di;
+  return acc;
+}
+
+static su2double ComputeVelocityDiscrepancy(CSolver& flow_solver,
+                                            const CGeometry& geometry,
+                                            const CConfig& config, int nDim)
+{
+  
+  //~~~~~~~~~~~~ Velocity-based model discrepancy ~~~~~~~~~~~~//
+
+  // A) Get mesh velocity data as point cloud
+  CMeshPointCloud mesh_pointcloud = BuildLocalVelocityPointCloud(&flow_solver, &geometry, nDim);
+  // Build KDTree for the mesh points
+  CKDTree local_mesh_tree;
+  local_mesh_tree.build(mesh_pointcloud.points);
+
+  // B) target load/caching
+  const CMeshPointCloud target_pointcloud = GetVelocityTargetPointCloud(&flow_solver, &config, nDim);
+
+  // C) interpolate model output velocities to target
+  CMeshPointCloud target_predictions = InterpolateMeshFieldToTarget(mesh_pointcloud, target_pointcloud, /*nVar=*/nDim, nDim); 
+
+  // Compute model discrepancy as sum of squared differences
+  auto d_vel = BuildVelocityResidualVector(target_pointcloud, target_predictions, nDim); // residual vector
+
+  // D) compute discrepancy metric (currently simple L2 norm squared)
+  su2double discrepancy = QuadraticFormIdentity(d_vel);
+
+  return discrepancy;
+}
+
+static std::vector<su2double>
+GetFGMFieldOnMeshFromLUT(CSolver* flow_solver,
+                         CSolver* species_solver,
+                         const CGeometry* geometry,
+                         unsigned long idx_var) {
+  if (!species_solver) return {};
+
+  auto* flamelet = dynamic_cast<CFluidFlamelet*>(flow_solver->GetFluidModel());
+  if (!flamelet) return {};
+
+  CLookUpTable* lut = flamelet->GetLookUpTable();
+  if (!lut) return {};
+
+  const unsigned short nCV = lut->GetTableDimension();
+  const unsigned int iProg = flamelet->GetProgVarIndex();
+  const unsigned int iEnth = flamelet->GetEnthalpyIndex();
+  const unsigned int iMix  = flamelet->GetMixtureFractionIndex();
+
+  auto* sp_nodes = species_solver->GetNodes();
+  if (!sp_nodes) return {};
+
+  const unsigned long nPoint = geometry->GetnPoint();
+  std::vector<su2double> field(nPoint, su2double(0.0));
+
+  for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+    if (!geometry->nodes->GetDomain(iPoint)) continue;
+
+    const su2double* scalars = sp_nodes->GetSolution(iPoint);
+    if (!scalars) continue;
+
+    const su2double prog = scalars[iProg];
+    const su2double enth = scalars[iEnth];
+
+    su2double val = 0.0;
+    bool inside = true;
+
+    if (nCV == 2) {
+      inside = lut->LookUp_XY(idx_var, &val, prog, enth, /*level=*/0);
+    } else {
+      const su2double mix = scalars[iMix];
+      inside = lut->LookUp_XYZ(idx_var, &val, prog, enth, mix);
+    }
+
+    field[iPoint] = val; 
+   
+  }
+
+  return field;
+}
+
+
+static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2double>& delta_on_mesh,
+                                                        const std::vector<su2double>& q_on_mesh,
+                                                        const CGeometry* geometry) {
+                                                        // Compute volume-averaged discrepancy (delta_on_mesh) weighted by q_on_mesh
+  if (delta_on_mesh.empty()) {
+    std::cout << " No target distance field on mesh; skipping flame distance discrepancy computation.\n";
+    return su2double(0.0);
+  }
+
+  const int localN = geometry->GetnPointDomain();
+  const int n = std::min<int>(localN,
+  static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
+
+  su2double num_local = 0.0;
+  su2double den_local = 0.0;
+
+  for (int i = 0; i < n; ++i) {
+    if (!geometry->nodes->GetDomain(i)) continue;
+
+    const su2double vol   = geometry->nodes->GetVolume(i);
+    const su2double delta = delta_on_mesh[i];
+    const su2double q     = q_on_mesh[i];
+
+    num_local += delta * q * vol;
+    den_local += q * vol;
+  }
+
+  su2double num_global = 0.0;
+  su2double den_global = 0.0;
+
+  SU2_MPI::Allreduce(&num_local, &num_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  SU2_MPI::Allreduce(&den_local, &den_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+
+  if (den_global <= 0.0) return 0.0;
+  return num_global / den_global;
+}
+
+static bool InitializeLUTVar(CSolver* flow_solver,
+                             const std::string& lut_var_name,
+                             unsigned long& idx_var)
+{
+  struct Entry { bool checked=false; bool valid=false; unsigned long idx=0; };
+  static std::unordered_map<std::string, Entry> cache;
+
+  auto& e = cache[lut_var_name];
+  if (e.checked) {
+    if (e.valid) idx_var = e.idx;
+    return e.valid;
+  }
+
+  e.checked = true;
+
+  auto* flamelet = dynamic_cast<CFluidFlamelet*>(flow_solver->GetFluidModel());
+  if (!flamelet) { e.valid = false; return false; }
+
+  auto* lut = flamelet->GetLookUpTable();
+  if (!lut)      { e.valid = false; return false; }
+
+  unsigned long idx = 0;
+  if (!lut->TryGetVarIndex(lut_var_name, idx)) {
+    e.valid = false;
+    return false;
+  }
+
+  e.idx = idx;
+  e.valid = true;
+  idx_var = e.idx;
+  return true;
+}
+
+static CMeshPointCloud BuildMeshQueryPointCloud(const CGeometry* geometry, int nDim)
+{
+  const unsigned long nPoint = geometry->GetnPoint();
+
+  std::vector<std::vector<su2double>> coords(nPoint, std::vector<su2double>(nDim, 0.0));
+  std::vector<std::vector<su2double>> dummy_vals(nPoint); // not used for queries
+
+  for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+    const su2double* x = geometry->nodes->GetCoord(iPoint);
+    for (int d = 0; d < nDim; ++d) coords[iPoint][d] = x[d];
+  }
+
+  return CMeshPointCloud(coords, dummy_vals);
+}
+
+static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
+                                                        const CGeometry* geometry,
+                                                        const CConfig* config,
+                                                        int nDim) {
+  const bool should_read = (config->GetInnerIter() == 0) || config->GetDiscrete_Adjoint();
+
+  if (should_read) {
+    const auto target_filename = config->GetTargetDistanceField_Filename();
+    std::ifstream f(target_filename);
+
+    const unsigned long nPoint = geometry->GetnPoint();
+
+    if (!f.good()) {
+      // Cache zeros so downstream is consistent
+      solver->SetInverseProblemTargetDistanceOnMesh(std::vector<su2double>(nPoint, 0.0));
+
+      if (SU2_MPI::GetRank() == 0) {
+        std::cout << "Distance-field target file not found (or empty). Continuing with zero distance field.\n";
+      }
+    }
+    else {
+
+      // Read target point cloud (coords + 1 scalar column)
+      auto [coords, vals] = readTargetData(target_filename, nDim, /*nValCols=*/1);
+      CMeshPointCloud target_cloud(coords, vals);
+
+      // Query points = mesh nodes (coords only)
+      CMeshPointCloud mesh_query = BuildMeshQueryPointCloud(geometry, nDim);
+
+      // Interpolate target -> mesh using your wrapper
+      CMeshPointCloud interp = InterpolateTargetFieldToMesh(target_cloud, mesh_query,/*nVar=*/1, /*nDim=*/nDim);
+
+      // Cache as dense vector aligned with mesh point index
+      std::vector<su2double> delta_on_mesh(nPoint, 0.0);
+      for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+        delta_on_mesh[iPoint] = interp.points[iPoint].values[0];
+      }
+
+      solver->SetInverseProblemTargetDistanceOnMesh(delta_on_mesh);
+    }
+  }
+  return solver->GetInverseProblemTargetDistanceOnMesh();
+}
+
+
+  //~~~~~~~~~~~~ Flame-shape discrepancy (integral distance field weighted by heat release) ~~~~~~~~~~~~//
+
+static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
+                                              CSolver& species_solver,
+                                              const CGeometry& geometry,
+                                              const CConfig& config,
+                                              int nDim) {
+  su2double disc_flame = 0.0;
+
+  unsigned long idx_LUT_var = 0; // index of field to use for flame shape discrepancy (hrr) in LUT
+  if (InitializeLUTVar(&flow_solver, "heat_release_rate", idx_LUT_var)) { // not an FGM case or HRR not available → skip flame discrepancy
+      
+    // A) get target distance field on mesh
+    const auto& delta_on_mesh = GetIPTargetDistanceOnMesh(&flow_solver, &geometry, &config, nDim);
+
+    // B) get heat release rate field on mesh
+    auto q_on_mesh = GetFGMFieldOnMeshFromLUT(&flow_solver, &species_solver, &geometry, idx_LUT_var);
+
+    bool plot_extracted_fields = false; // set to true to output extracted fields for debugging
+
+    if (SU2_MPI::GetRank() == 0 && plot_extracted_fields) {
+      // write to file for debugging on every 50th iteration
+      if (config.GetInnerIter() == 0 % 50 == 0) {
+        // extracted HR field
+        const unsigned long nPoint = geometry.GetnPoint();
+        const auto& field = q_on_mesh;
+        if (SU2_MPI::GetRank() == 0) {
+          std::ofstream ofs("Extracted_HR_field_On_Mesh.dat", std::ios::out);
+          ofs << std::setprecision(12);
+          ofs << "# X Y HR\n";
+          for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+            ofs << geometry.nodes->GetCoord(iPoint, 0) << " "
+                << geometry.nodes->GetCoord(iPoint, 1);
+            // if (nDim == 3) ofs << " " << geometry->nodes->GetCoord(iPoint, 2);
+            ofs << " " << field[iPoint] << '\n';
+          }
+          ofs.close();
+        }
+
+        // interpolated target distance field
+        if (SU2_MPI::GetRank() == 0) {
+          std::ofstream ofs("Interpolated_Target_Distance_On_Mesh.dat", std::ios::out);
+          ofs << std::setprecision(12);
+          for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+            ofs << geometry.nodes->GetCoord(iPoint, 0) << " "
+                << geometry.nodes->GetCoord(iPoint, 1);
+            if (nDim == 3) ofs << " " << geometry.nodes->GetCoord(iPoint, 2);
+            ofs << " " << delta_on_mesh[iPoint] << '\n';
+          }
+          ofs.close();
+        }
+      }
+    }
+    // C) compute volume-averaged discrepancy
+    disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_on_mesh, &geometry);
+  } 
+  return disc_flame;
+}
+
+void CFlowOutput::SetInverseProblem(CSolver** solver_container, const CGeometry *geometry, const CConfig *config){
+
+  CSolver* flow_solver    = solver_container[FLOW_SOL];
+  CSolver* species_solver = solver_container[SPECIES_SOL]; // may be nullptr in non-species runs
+
+  //~~~~~~~~~~~~ Velocity-based model discrepancy ~~~~~~~~~~~~//
+  const su2double disc_vel = ComputeVelocityDiscrepancy(*flow_solver, *geometry, *config, nDim);
+
+  //~~~~~~~~~~~~ Flame distance-based model discrepancy ~~~~~~~~~~~~//
+  const su2double disc_flame = ComputeFlameShapeDiscrepancy(*flow_solver, *species_solver, *geometry, *config, nDim);
+
+  //~~~~~~~~~~~~ Combine discrepancies ~~~~~~~~~~~~//
+  const su2double disc_total = disc_vel + disc_flame;
+
+  flow_solver->SetTotal_ModelDiscrepancy(disc_total);
+
+  SetHistoryOutputValue("INVERSE_PROBLEM_VELOCITY_MODEL_DISCREPANCY", disc_vel);
+  SetHistoryOutputValue("INVERSE_PROBLEM_FLAME_MODEL_DISCREPANCY", disc_flame);
+  SetHistoryOutputValue("INVERSE_PROBLEM_TOTAL_MODEL_DISCREPANCY", disc_total);
+
+  // Write value to file (only once, on rank 0)
+  if (SU2_MPI::GetRank() == 0) {
+      std::ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
+      ModelDiscrepancyStream << std::setprecision(12) << disc_total << '\n';
+      ModelDiscrepancyStream.close();
+  }
+}
+
+
+// END INVERSE PROBLEM FUNCTIONS
 
 void CFlowOutput::AddNearfieldInverseDesignOutput(){
 

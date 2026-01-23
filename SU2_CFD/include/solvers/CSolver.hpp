@@ -57,7 +57,7 @@
 #include "../../../Common/include/toolboxes/MMS/CVerificationSolution.hpp"
 #include "../variables/CVariable.hpp"
 
-#include "../../include/output/CDatapointcloud.hpp"
+#include "../../include/output/CMeshPointCloud.hpp"
 
 #ifdef HAVE_LIBROM
 #include "librom.h"
@@ -2330,6 +2330,8 @@ public:
    */
   inline virtual void SetTotal_ModelDiscrepancy(su2double val_discrepancy) { }
 
+  inline virtual su2double GetTotal_ModelDiscrepancy() const { return 0; }
+
   /*!
    * \brief A virtual member.
    * \param[in] val_heat - Value of the difference between heat and the target heat.
@@ -2793,16 +2795,15 @@ public:
    * \param[in] val_vertex - Vertex of the marker <i>val_marker</i> where the coefficient is evaluated.
    * \return Target coordinates and data std::pair<std::vector<std::vector<su2double>>, std::vector<std::vector<su2double>>>.
    */
-  inline virtual CDatapointcloud GetInverseProblemTargetData() const { 
+  inline virtual CMeshPointCloud GetInverseProblemTargetVelocityData() const { 
     return {}; }
 
-  /*!
-   * \brief A virtual member.
-   * \param[in] target_coordinates  - Coordinates where the targets are provided.
-   * \param[in] target_values       - Target values.
-   * \return Value of the pressure coefficient.
-   */
-  inline virtual void SetInverseProblemTargetData(const CDatapointcloud& data) { }
+  inline virtual std::vector<su2double> GetInverseProblemTargetDistanceOnMesh() const {
+    return {};
+  }
+  inline virtual void SetInverseProblemTargetDistanceOnMesh(const std::vector<su2double>&) { }
+
+  inline virtual void SetInverseProblemTargetVelocityData(const CMeshPointCloud& data) { }
 
   /*!
    * \brief A virtual member.
@@ -3756,11 +3757,17 @@ public:
                                         CConfig *config,
                                         bool reset = false) { }
 
-  inline virtual void RegisterModelParameter(CGeometry *geometry,
+  inline virtual void RegisterModelParameters(CGeometry *geometry,
                                               CConfig *config,
                                               bool reset = false) { }
 
-  inline virtual void GetModelParametersSensitivity() {}
+  inline virtual const vector<su2double> GetModelParametersGradient() { return vector<su2double>(); }
+
+  inline virtual const su2double GetModelParametersGradientNorm() { return 0.0; }
+
+  inline virtual void SetModelParametersGradient(const vector<su2double>& val_sens) { }
+
+  inline virtual void ComputeModelParametersGradient() { }
 
   /*!
    * \brief A virtual member.
