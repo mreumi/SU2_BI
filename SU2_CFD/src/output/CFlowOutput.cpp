@@ -46,7 +46,6 @@
 #include "../../include/fluid/CCoolProp.hpp"
 
 #include "../../include/output/CMeshPointCloud.hpp"
-//#include "../../include/output/CInterpolator.hpp"
 #include "../../include/output/CKdtree.hpp"
 #include "../../include/fluid/CFluidFlamelet.hpp"
 

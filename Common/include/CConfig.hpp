@@ -1277,6 +1277,11 @@ private:
   mutable std::unordered_map<std::string, int>       IsoTemp_Correction_Index_;
   mutable std::unordered_map<std::string, bool>      IsoTemp_Correction_Registered_;
 
+  /*--- Inlet velocity factor correction options to register them for inverse problems ---*/
+  mutable std::unordered_map<std::string, su2double> InletVelocity_Factor_AD_;
+  mutable std::unordered_map<std::string, int>       InletVelocity_Factor_Index_;
+  mutable std::unordered_map<std::string, bool>      InletVelocity_Factor_Registered_;
+
   /*--- Additional flamelet solver options ---*/
   FluidFlamelet_ParsedOptions flamelet_ParsedOptions; /*!< \brief Additional flamelet solver options */
 
@@ -1733,13 +1738,19 @@ public:
    */
   su2double GetWallTemperature(void) const { return Wall_Temperature; }
 
+  /* Helper functions for inverse problems, including an additive correction to wall temperature as input */
   su2double& GetIsothermal_TemperatureCorrectionRef(const std::string& marker) const;
   bool IsIsothermalTempCorrectionRegistered(const std::string& marker) const;
   int  GetIsothermalTempCorrectionIndex(const std::string& marker) const;
   void SetIsothermalTempCorrectionRegistered(const std::string& marker, int idx) const;
 
+  /* Helper functions for inverse problems, including a multiplicative correction to inflow velocity as input */
+  su2double& Get_InletVelocityFactorRef(const std::string& marker) const;
+  bool IsInletVelFactorRegistered(const std::string& marker) const;
+  int  GetInletVelFactorIndex(const std::string& marker) const;
+  void SetInletVelFactorRegistered(const std::string& marker, int idx) const;
 
-    /*!
+  /*!
    * \brief Get the p-norm for heat-flux objective functions (adjoint problem).
    * \return Value of the heat flux p-norm
    */

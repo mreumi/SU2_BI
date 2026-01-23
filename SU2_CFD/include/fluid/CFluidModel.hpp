@@ -123,7 +123,7 @@ class CFluidModel {
     return s.substr(b, e - b + 1);
   }
 
-  inline vector<int> RegisterCustomValues (const CConfig* config) { 
+  inline vector<int> RegisterCustomValues (CConfig* config) { 
 
     // Get the list of IP parameters
     const string* ip_pars = config->GetIP_Parameters();
@@ -157,6 +157,10 @@ class CFluidModel {
         const std::string marker = Trim(ExtractKeyValueDash(token, "ISOTHERMAL_TEMPERATURE"));
         idx = RegisterIsothermalWallTemp(marker, config, index);
       }
+      else if (HasKeyValueDash(token, "INLET_VELOCITY_FACTOR")) {
+        const std::string marker = Trim(ExtractKeyValueDash(token, "INLET_VELOCITY_FACTOR"));
+        idx = RegisterInletVelocityFactor(marker, config, index);
+      }
       else {
         std::cout << "/!\\ Warning: Unknown IP parameter '" << token << "' (skipping)\n";
       }
@@ -168,7 +172,7 @@ class CFluidModel {
   }
   
 inline int RegisterIsothermalWallTemp(const std::string& marker,
-                                    const CConfig* config,
+                                    CConfig* config,
                                     int& index) {
 
   // Check if registered. If yes, return existing index
@@ -195,6 +199,33 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
 
   return assigned;
 }
+
+inline int RegisterInletVelocityFactor(const std::string& marker,
+                                       CConfig* config,
+                                       int& index) {
+
+  if (config->IsInletVelFactorRegistered(marker)) {
+    return config->GetInletVelFactorIndex(marker);
+  }
+
+  su2double& Ucorr = config->Get_InletVelocityFactorRef(marker);
+  Ucorr = 0.0;  // baseline: scale = 1.0 + Ucorr
+
+  AD::RegisterInput(Ucorr);
+  AD::SetIndex(index, Ucorr);
+
+  const int assigned = index;
+  config->SetInletVelFactorRegistered(marker, assigned);
+
+  std::cout << "[INLET-U-REG] stored key='" << marker << "'"
+            << " registered=1"
+            << " idx=" << assigned
+            << std::endl;
+
+  ++index;
+  return assigned;
+}
+
 
   /*!
    * \brief Get fluid pressure.

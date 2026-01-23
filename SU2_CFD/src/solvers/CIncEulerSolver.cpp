@@ -2313,6 +2313,9 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
     /*--- The velocity is either prescribed or computed from total pressure. ---*/
 
+    su2double Ucorr;
+    su2double scale;
+
     switch (Kind_Inlet) {
 
         /*--- Velocity and temperature (if required) been specified at the inlet. ---*/
@@ -2322,6 +2325,11 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
         /*--- Retrieve the specified velocity and temperature for the inlet. ---*/
 
         Vel_Mag  = Inlet_Ptotal[val_marker][iVertex]/config->GetVelocity_Ref();
+        
+        /*--- Apply correction factor to inlet velocity which can be registered as an input for inverse problems. ---*/
+        Ucorr = config->Get_InletVelocityFactorRef(Marker_Tag);
+        scale = 1.0 + Ucorr;
+        Vel_Mag *= scale;
 
         /*--- Store the velocity in the primitive variable vector. ---*/
 
