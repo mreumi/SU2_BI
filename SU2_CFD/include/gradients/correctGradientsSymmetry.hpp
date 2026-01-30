@@ -30,6 +30,10 @@
 #include <vector>
 #include <algorithm>
 
+ // added these two line to fix error (compiled before, so seems unused ?!?)
+#include "../include/geometry/CGeometry.hpp"
+#include "../solvers/CSolver.hpp"
+
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 
