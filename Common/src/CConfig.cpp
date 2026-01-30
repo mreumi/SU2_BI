@@ -9544,19 +9544,18 @@ su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) cons
       const su2double Tbase = Isothermal_Temperature[iMarker_Isothermal];
       const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(val_marker); // 0.0 unless registered/modified
 
-      const su2double& Tcor_ref = GetIsothermal_TemperatureCorrectionRef(val_marker);
+      // const su2double& Tcor_ref = GetIsothermal_TemperatureCorrectionRef(val_marker);
 
-      // Debug output
-      const bool has_cor = IsoTemp_Correction_AD_.count(val_marker);
-      const bool is_reg  = IsoTemp_Correction_Registered_.count(val_marker) ?
-                          IsoTemp_Correction_Registered_.at(val_marker) : false;
+      // // Debug output
+      // const bool has_cor = IsoTemp_Correction_AD_.count(val_marker);
+      // const bool is_reg  = IsoTemp_Correction_Registered_.count(val_marker) ?
+      //                     IsoTemp_Correction_Registered_.at(val_marker) : false;
 
       return Tbase + Tcor;
     }
   }
 
-  // fallback (preserving your existing behavior)
-  // std::cout << "[ISO-T] marker='" << val_marker << "' not found, using first entry as fallback." << std::endl;
+  // fallback (preserving existing behavior if marker not found, returns first entry (?!) )
   const su2double Tbase = Isothermal_Temperature[0];
   const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(Marker_Isothermal[0]);
   return Tbase + Tcor;

@@ -443,6 +443,4 @@ class CLookUpTable {
    */
   unsigned long GetNullIndex() const { return idx_null; }
 
-  unsigned short GetTableDimension() const { return table_dim; }
-
 };

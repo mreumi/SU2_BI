@@ -2331,55 +2331,44 @@ static su2double ComputeVelocityDiscrepancy(CSolver& flow_solver,
   return discrepancy;
 }
 
-static std::vector<su2double>
-GetFGMFieldOnMeshFromLUT(CSolver* flow_solver,
-                         CSolver* species_solver,
-                         const CGeometry* geometry,
-                         unsigned long idx_var) {
-  if (!species_solver) return {};
+static std::vector<su2double> GetLookupField(CConfig& config,
+                                            CSolver* species_solver,
+                                            const CGeometry* geometry,
+                                            const std::string& lookup_name) {
+    // Get index of lookup variable                 
+    const auto& flamelet_config_options = config.GetFlameletParsedOptions();
+    unsigned int LU_idx = 0;
+    for (auto i_lookup = 0u; i_lookup < flamelet_config_options.n_lookups;++i_lookup) {
+      if (flamelet_config_options.lookup_names[i_lookup] == lookup_name) {
+        LU_idx = static_cast<int>(i_lookup);
+      }
+    }
+    // std::cout << " Getting lookup field for variable " << lookup_name << " at index " << LU_idx << "\n";
+    
+    // Extract field on mesh from LUT
+    const auto Node_Species = species_solver->GetNodes();
+    auto nPoint = geometry->GetnPoint();
+    std::vector<su2double> LUT_field(nPoint, su2double(0.0));
+    su2double minVal = std::numeric_limits<su2double>::max();
+    su2double maxVal = std::numeric_limits<su2double>::lowest();
 
-  auto* flamelet = dynamic_cast<CFluidFlamelet*>(flow_solver->GetFluidModel());
-  if (!flamelet) return {};
-
-  CLookUpTable* lut = flamelet->GetLookUpTable();
-  if (!lut) return {};
-
-  const unsigned short nCV = lut->GetTableDimension();
-  const unsigned int iProg = flamelet->GetProgVarIndex();
-  const unsigned int iEnth = flamelet->GetEnthalpyIndex();
-  const unsigned int iMix  = flamelet->GetMixtureFractionIndex();
-
-  auto* sp_nodes = species_solver->GetNodes();
-  if (!sp_nodes) return {};
-
-  const unsigned long nPoint = geometry->GetnPoint();
-  std::vector<su2double> field(nPoint, su2double(0.0));
-
-  for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
-    if (!geometry->nodes->GetDomain(iPoint)) continue;
-
-    const su2double* scalars = sp_nodes->GetSolution(iPoint);
-    if (!scalars) continue;
-
-    const su2double prog = scalars[iProg];
-    const su2double enth = scalars[iEnth];
-
-    su2double val = 0.0;
-    bool inside = true;
-
-    if (nCV == 2) {
-      inside = lut->LookUp_XY(idx_var, &val, prog, enth, /*level=*/0);
-    } else {
-      const su2double mix = scalars[iMix];
-      inside = lut->LookUp_XYZ(idx_var, &val, prog, enth, mix);
+    for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+      LUT_field[iPoint] = Node_Species->GetScalarLookups(iPoint)[LU_idx];
+      if (LUT_field[iPoint] < minVal) minVal = LUT_field[iPoint];
+      if (LUT_field[iPoint] > maxVal) maxVal = LUT_field[iPoint];
     }
 
-    field[iPoint] = val; 
-   
-  }
+    // Cutoff anything below 10% of the range to avoid spurious small values
+    su2double cutoff = minVal + 0.1 * (maxVal - minVal);
+    std::vector<su2double> LUT_field_cutoff(nPoint, su2double(0.0));
 
-  return field;
-}
+    for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+      if (LUT_field[iPoint] < cutoff) LUT_field_cutoff[iPoint] = su2double(0.0);
+      else                           LUT_field_cutoff[iPoint] = LUT_field[iPoint];
+    }
+
+    return LUT_field_cutoff;
+  }
 
 
 static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2double>& delta_on_mesh,
@@ -2392,8 +2381,7 @@ static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2doub
   }
 
   const int localN = geometry->GetnPointDomain();
-  const int n = std::min<int>(localN,
-  static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
+  const int n = std::min<int>(localN, static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
 
   su2double num_local = 0.0;
   su2double den_local = 0.0;
@@ -2417,39 +2405,6 @@ static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2doub
 
   if (den_global <= 0.0) return 0.0;
   return num_global / den_global;
-}
-
-static bool InitializeLUTVar(CSolver* flow_solver,
-                             const std::string& lut_var_name,
-                             unsigned long& idx_var)
-{
-  struct Entry { bool checked=false; bool valid=false; unsigned long idx=0; };
-  static std::unordered_map<std::string, Entry> cache;
-
-  auto& e = cache[lut_var_name];
-  if (e.checked) {
-    if (e.valid) idx_var = e.idx;
-    return e.valid;
-  }
-
-  e.checked = true;
-
-  auto* flamelet = dynamic_cast<CFluidFlamelet*>(flow_solver->GetFluidModel());
-  if (!flamelet) { e.valid = false; return false; }
-
-  auto* lut = flamelet->GetLookUpTable();
-  if (!lut)      { e.valid = false; return false; }
-
-  unsigned long idx = 0;
-  if (!lut->TryGetVarIndex(lut_var_name, idx)) {
-    e.valid = false;
-    return false;
-  }
-
-  e.idx = idx;
-  e.valid = true;
-  idx_var = e.idx;
-  return true;
 }
 
 static CMeshPointCloud BuildMeshQueryPointCloud(const CGeometry* geometry, int nDim)
@@ -2496,7 +2451,7 @@ static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
       // Query points = mesh nodes (coords only)
       CMeshPointCloud mesh_query = BuildMeshQueryPointCloud(geometry, nDim);
 
-      // Interpolate target -> mesh using your wrapper
+      // Interpolate target mesh 
       CMeshPointCloud interp = InterpolateTargetFieldToMesh(target_cloud, mesh_query,/*nVar=*/1, /*nDim=*/nDim);
 
       // Cache as dense vector aligned with mesh point index
@@ -2521,53 +2476,58 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
                                               int nDim) {
   su2double disc_flame = 0.0;
 
-  unsigned long idx_LUT_var = 0; // index of field to use for flame shape discrepancy (hrr) in LUT
-  if (InitializeLUTVar(&flow_solver, "heat_release_rate", idx_LUT_var)) { // not an FGM case or HRR not available → skip flame discrepancy
-      
-    // A) get target distance field on mesh
-    const auto& delta_on_mesh = GetIPTargetDistanceOnMesh(&flow_solver, &geometry, &config, nDim);
+  // A) get target distance field on mesh
+  const auto& delta_on_mesh = GetIPTargetDistanceOnMesh(&flow_solver, &geometry, &config, nDim);
 
-    // B) get heat release rate field on mesh
-    auto q_on_mesh = GetFGMFieldOnMeshFromLUT(&flow_solver, &species_solver, &geometry, idx_LUT_var);
+  // B) get heat release rate field on mesh ( can be extended to other solvers later )
 
-    bool plot_extracted_fields = false; // set to true to output extracted fields for debugging
+  auto nPoint = geometry.GetnPoint();
+  std::vector<su2double> q_field(nPoint, su2double(0.0));
 
-    if (SU2_MPI::GetRank() == 0 && plot_extracted_fields) {
-      // write to file for debugging on every 50th iteration
-      if (config.GetInnerIter() == 0 % 50 == 0) {
-        // extracted HR field
-        const unsigned long nPoint = geometry.GetnPoint();
-        const auto& field = q_on_mesh;
-        if (SU2_MPI::GetRank() == 0) {
-          std::ofstream ofs("Extracted_HR_field_On_Mesh.dat", std::ios::out);
-          ofs << std::setprecision(12);
-          ofs << "# X Y HR\n";
-          for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
-            ofs << geometry.nodes->GetCoord(iPoint, 0) << " "
-                << geometry.nodes->GetCoord(iPoint, 1);
-            // if (nDim == 3) ofs << " " << geometry->nodes->GetCoord(iPoint, 2);
-            ofs << " " << field[iPoint] << '\n';
-          }
-          ofs.close();
+  if (config.GetKind_Species_Model() == SPECIES_MODEL::FLAMELET) {
+      q_field = GetLookupField(const_cast<CConfig&>(config), &species_solver, &geometry, "heat_release_rate");
+    }
+  else {
+      // Unsupported species model for flame shape discrepancy computation. Skipping.
+      return disc_flame;
+    }
+   
+  bool plot_extracted_fields = true; // set to true to output extracted fields for debugging
+
+  if (SU2_MPI::GetRank() == 0 && plot_extracted_fields) {
+    // write to file for debugging on every 50th iteration
+    if (config.GetInnerIter() == 0 || (config.GetInnerIter() % 50 == 0)) {
+      // extracted HR field
+      const unsigned long nPoint = geometry.GetnPoint();
+      const auto& fieldLUT = q_field;
+
+      if (SU2_MPI::GetRank() == 0) {
+        std::cout << " Writing extracted LUT field and interpolated distance field on mesh to file for debugging.\n";
+        std::ofstream ofsLUT("Extracted_LUT_field_On_Mesh.dat", std::ios::out);
+        std::ofstream ofsDIST("Interpolated_Target_Distance_On_Mesh.dat", std::ios::out);
+        std::ofstream ofsVOL("Extracted_Volumes_On_Mesh.dat", std::ios::out);
+        ofsLUT << std::setprecision(12);
+        ofsDIST << std::setprecision(12);
+        ofsVOL << std::setprecision(12);
+        ofsLUT << "# X Y HR Npts" << nPoint << '\n';
+        ofsDIST << "# X Y Distances Npts" << nPoint << '\n';
+        ofsVOL << "# X Y Volumes Npts" << nPoint << '\n';
+        for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
+          ofsLUT  << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << fieldLUT[iPoint] << '\n';
+          ofsDIST << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << delta_on_mesh[iPoint] << '\n';
+          ofsVOL  << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << geometry.nodes->GetVolume(iPoint) << '\n';
+          // if (nDim == 3) ofs << " " << geometry->nodes->GetCoord(iPoint, 2);
         }
-
-        // interpolated target distance field
-        if (SU2_MPI::GetRank() == 0) {
-          std::ofstream ofs("Interpolated_Target_Distance_On_Mesh.dat", std::ios::out);
-          ofs << std::setprecision(12);
-          for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
-            ofs << geometry.nodes->GetCoord(iPoint, 0) << " "
-                << geometry.nodes->GetCoord(iPoint, 1);
-            if (nDim == 3) ofs << " " << geometry.nodes->GetCoord(iPoint, 2);
-            ofs << " " << delta_on_mesh[iPoint] << '\n';
-          }
-          ofs.close();
-        }
+        ofsLUT.close();
+        ofsDIST.close();
+        ofsVOL.close();
       }
     }
-    // C) compute volume-averaged discrepancy
-    disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_on_mesh, &geometry);
-  } 
+  }
+
+  // C) compute volume-averaged discrepancy
+  disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_field, &geometry);
+  
   return disc_flame;
 }
 
