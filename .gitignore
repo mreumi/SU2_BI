@@ -110,3 +110,18 @@ ninja-win.zip
 ninja.exe
 .gitignore
 Docs/html
+
+# --- Local build artifacts ---
+build/
+*_build/
+*_install/
+
+# --- Cantera subproject artifacts ---
+subprojects/cantera/build/
+subprojects/cantera/install/
+subprojects/cantera/install_ad/
+subprojects/cantera/cantera.conf
+
+# --- Python cache ---
+__pycache__/
+*.pyc
