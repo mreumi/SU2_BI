@@ -125,3 +125,8 @@ subprojects/cantera/cantera.conf
 # --- Python cache ---
 __pycache__/
 *.pyc
+
+# Ignore cantera checkout (fetched via script)
+subprojects/cantera/
+!subprojects/cantera/meson.build
+subprojects/.wraplock
