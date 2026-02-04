@@ -2347,16 +2347,23 @@ static std::vector<su2double> GetLookupField(CConfig& config,
     
     // Extract field on mesh from LUT
     const auto Node_Species = species_solver->GetNodes();
-    auto nPoint = geometry->GetnPoint();
+    auto nPoint = geometry->GetnPointDomain();
     std::vector<su2double> LUT_field(nPoint, su2double(0.0));
     su2double minVal = std::numeric_limits<su2double>::max();
     su2double maxVal = std::numeric_limits<su2double>::lowest();
+    su2double minValGlobal = std::numeric_limits<su2double>::max();
+    su2double maxValGlobal = std::numeric_limits<su2double>::lowest();
 
     for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
       LUT_field[iPoint] = Node_Species->GetScalarLookups(iPoint)[LU_idx];
       if (LUT_field[iPoint] < minVal) minVal = LUT_field[iPoint];
       if (LUT_field[iPoint] > maxVal) maxVal = LUT_field[iPoint];
     }
+    // Get global min/max via MPI
+    SU2_MPI::Allreduce(&minVal, &minValGlobal, 1, MPI_DOUBLE, MPI_MIN, SU2_MPI::GetComm());
+    SU2_MPI::Allreduce(&maxVal, &maxValGlobal, 1, MPI_DOUBLE, MPI_MAX, SU2_MPI::GetComm());
+    minVal = minValGlobal;
+    maxVal = maxValGlobal;
 
     // Cutoff anything below 10% of the range to avoid spurious small values
     su2double cutoff = minVal + 0.1 * (maxVal - minVal);
@@ -2409,7 +2416,7 @@ static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2doub
 
 static CMeshPointCloud BuildMeshQueryPointCloud(const CGeometry* geometry, int nDim)
 {
-  const unsigned long nPoint = geometry->GetnPoint();
+  const unsigned long nPoint = geometry->GetnPointDomain();
 
   std::vector<std::vector<su2double>> coords(nPoint, std::vector<su2double>(nDim, 0.0));
   std::vector<std::vector<su2double>> dummy_vals(nPoint); // not used for queries
@@ -2432,7 +2439,7 @@ static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
     const auto target_filename = config->GetTargetDistanceField_Filename();
     std::ifstream f(target_filename);
 
-    const unsigned long nPoint = geometry->GetnPoint();
+    const unsigned long nPoint = geometry->GetnPointDomain();
 
     if (!f.good()) {
       // Cache zeros so downstream is consistent
@@ -2476,12 +2483,12 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
                                               int nDim) {
   su2double disc_flame = 0.0;
 
+  auto nPoint = geometry.GetnPointDomain();
+
   // A) get target distance field on mesh
-  const auto& delta_on_mesh = GetIPTargetDistanceOnMesh(&flow_solver, &geometry, &config, nDim);
+  std::vector<su2double> delta_on_mesh = GetIPTargetDistanceOnMesh(&flow_solver, &geometry, &config, nDim);
 
   // B) get heat release rate field on mesh ( can be extended to other solvers later )
-
-  auto nPoint = geometry.GetnPoint();
   std::vector<su2double> q_field(nPoint, su2double(0.0));
 
   if (config.GetKind_Species_Model() == SPECIES_MODEL::FLAMELET) {
@@ -2491,40 +2498,89 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
       // Unsupported species model for flame shape discrepancy computation. Skipping.
       return disc_flame;
     }
-   
+
+
+  // Optional: output extracted fields for debugging
   bool plot_extracted_fields = true; // set to true to output extracted fields for debugging
+  const bool do_dump = plot_extracted_fields && (config.GetInnerIter() == 0 || (config.GetInnerIter() % 500 == 0));
 
-  if (SU2_MPI::GetRank() == 0 && plot_extracted_fields) {
-    // write to file for debugging on every 50th iteration
-    if (config.GetInnerIter() == 0 || (config.GetInnerIter() % 50 == 0)) {
-      // extracted HR field
-      const unsigned long nPoint = geometry.GetnPoint();
-      const auto& fieldLUT = q_field;
+  if (do_dump) {
 
-      if (SU2_MPI::GetRank() == 0) {
-        std::cout << " Writing extracted LUT field and interpolated distance field on mesh to file for debugging.\n";
-        std::ofstream ofsLUT("Extracted_LUT_field_On_Mesh.dat", std::ios::out);
-        std::ofstream ofsDIST("Interpolated_Target_Distance_On_Mesh.dat", std::ios::out);
-        std::ofstream ofsVOL("Extracted_Volumes_On_Mesh.dat", std::ios::out);
-        ofsLUT << std::setprecision(12);
-        ofsDIST << std::setprecision(12);
-        ofsVOL << std::setprecision(12);
-        ofsLUT << "# X Y HR Npts" << nPoint << '\n';
-        ofsDIST << "# X Y Distances Npts" << nPoint << '\n';
-        ofsVOL << "# X Y Volumes Npts" << nPoint << '\n';
-        for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
-          ofsLUT  << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << fieldLUT[iPoint] << '\n';
-          ofsDIST << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << delta_on_mesh[iPoint] << '\n';
-          ofsVOL  << geometry.nodes->GetCoord(iPoint, 0) << " " << geometry.nodes->GetCoord(iPoint, 1) << " " << geometry.nodes->GetVolume(iPoint) << '\n';
-          // if (nDim == 3) ofs << " " << geometry->nodes->GetCoord(iPoint, 2);
-        }
-        ofsLUT.close();
-        ofsDIST.close();
-        ofsVOL.close();
+    // ===== ALL RANKS participate in the collectives =====
+    const int nLocal = static_cast<int>(nPoint);
+    const int nRanks = SU2_MPI::GetSize();
+
+    std::vector<int> counts(nRanks, 0), displs(nRanks, 0);
+    SU2_MPI::Allgather(&nLocal, 1, MPI_INT, counts.data(), 1, MPI_INT, SU2_MPI::GetComm());
+
+    int total = 0;
+    for (int r = 0; r < nRanks; ++r) {
+      displs[r] = total;
+      total += counts[r];
+    }
+    const unsigned long globalDom = geometry.GetGlobal_nPointDomain();
+    if (SU2_MPI::GetRank() == 0 && static_cast<unsigned long>(total) != globalDom) {
+      std::cout << "WARNING: gathered total != Global_nPointDomain (duplicates or non-owned domains)\n";
+    }
+
+    std::vector<su2double> q_all(total, 0.0), d_all(total, 0.0);
+
+    SU2_MPI::Allgatherv(q_field.data(), nLocal, MPI_DOUBLE,
+                        q_all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+                        SU2_MPI::GetComm());
+
+    SU2_MPI::Allgatherv(delta_on_mesh.data(), nLocal, MPI_DOUBLE,
+                        d_all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+                        SU2_MPI::GetComm());
+
+    // also gather coordinates/volume so rank 0 can write meaningful X/Y/Vol
+    std::vector<su2double> x_local(nLocal), y_local(nLocal), vol_local(nLocal);
+    for (int i = 0; i < nLocal; ++i) {
+      x_local[i]   = geometry.nodes->GetCoord(i, 0);
+      y_local[i]   = geometry.nodes->GetCoord(i, 1);
+      vol_local[i] = geometry.nodes->GetVolume(i);
+    }
+
+    std::vector<su2double> x_all(total), y_all(total), vol_all(total);
+
+    SU2_MPI::Allgatherv(x_local.data(), nLocal, MPI_DOUBLE,
+                        x_all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+                        SU2_MPI::GetComm());
+
+    SU2_MPI::Allgatherv(y_local.data(), nLocal, MPI_DOUBLE,
+                        y_all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+                        SU2_MPI::GetComm());
+
+    SU2_MPI::Allgatherv(vol_local.data(), nLocal, MPI_DOUBLE,
+                        vol_all.data(), counts.data(), displs.data(), MPI_DOUBLE,
+                        SU2_MPI::GetComm());
+
+    // ===== ONLY rank 0 does file I/O =====
+    if (SU2_MPI::GetRank() == 0) {
+
+      std::cout << "[INV-PROB] Writing extracted LUT field and distance field...\n";
+
+      std::ofstream ofsLUT("Extracted_LUT_field_On_Mesh.dat");
+      std::ofstream ofsDIST("Interpolated_Target_Distance_On_Mesh.dat");
+      std::ofstream ofsVOL("Extracted_Volumes_On_Mesh.dat");
+
+      ofsLUT  << std::setprecision(12);
+      ofsDIST << std::setprecision(12);
+      ofsVOL  << std::setprecision(12);
+
+      ofsLUT  << "# X Y HR Npts " << total << '\n';
+      ofsDIST << "# X Y Distances Npts " << total << '\n';
+      ofsVOL  << "# X Y Volumes Npts " << total << '\n';
+
+      for (int i = 0; i < total; ++i) {
+        ofsLUT  << x_all[i]   << " " << y_all[i]   << " " << q_all[i]  << '\n';
+        ofsDIST << x_all[i]   << " " << y_all[i]   << " " << d_all[i]  << '\n';
+        ofsVOL  << x_all[i]   << " " << y_all[i]   << " " << vol_all[i] << '\n';
       }
     }
   }
-
+  // End of optional dump
+  
   // C) compute volume-averaged discrepancy
   disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_field, &geometry);
   
