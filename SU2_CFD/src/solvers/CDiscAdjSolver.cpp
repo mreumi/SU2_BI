@@ -26,6 +26,7 @@
  */
 
 #include "../../include/solvers/CDiscAdjSolver.hpp"
+#include <iostream>
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 
@@ -291,6 +292,12 @@ void CDiscAdjSolver::RegisterVariables(CGeometry *geometry, CConfig *config, boo
    * and thereby also the objective function. The adjoint values (i.e. the derivatives) can be
    * extracted in the ExtractAdjointVariables routine. ---*/
 
+  // /*--- Register model parameters as input ---*/
+  // if(config->GetInvProblem()) {
+  //   RegisterModelParameters(geometry, config, reset);
+  // }
+
+
   }
   END_SU2_OMP_SAFE_GLOBAL_ACCESS
 }
@@ -324,6 +331,17 @@ void CDiscAdjSolver::ComputeModelParametersGradient() {
   AD::EndUseAdjoints();
 
   SetModelParametersGradient(ModelDiscrepancyGradient);
+
+  // Write gradient to file and history (needs better location ?)
+  ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
+  for (size_t j = 0; j < ModelDiscrepancyGradient.size(); ++j) {
+      GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << '\n';
+      std::cout << "[INV-PROB] Model parameter " << j << " gradient: " << ModelDiscrepancyGradient[j] << std::endl;
+  }
+  GradientModelParameters.close();
+
+
+  
 }
 
 void CDiscAdjSolver::RegisterOutput(CGeometry *geometry, CConfig *config) {

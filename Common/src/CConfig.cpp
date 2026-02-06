@@ -5154,6 +5154,8 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
     nDV = 1;
     Design_Variable = new unsigned short [nDV];
     Design_Variable[0] = NO_DEFORMATION;
+  
+    std::cout << "No design variables specified. Defaulting to NO_DEFORMATION." << std::endl;
   }
 
   /*--- Checks for incompressible flow problems. ---*/
@@ -9518,7 +9520,7 @@ void CConfig::SetIsothermalTempCorrectionRegistered(const std::string& marker, i
 }
 
 su2double& CConfig::Get_InletVelocityFactorRef(const std::string& marker) const {
-  // operator[] will default-construct (1.0) if missing
+  // operator[] will default-construct (0.0) if missing
   return InletVelocity_Factor_AD_[marker];
 }
 
@@ -9543,7 +9545,7 @@ su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) cons
     if (Marker_Isothermal[iMarker_Isothermal] == val_marker) {
       const su2double Tbase = Isothermal_Temperature[iMarker_Isothermal];
       const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(val_marker); // 0.0 unless registered/modified
-
+      
       // const su2double& Tcor_ref = GetIsothermal_TemperatureCorrectionRef(val_marker);
 
       // // Debug output
@@ -9569,6 +9571,30 @@ su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) cons
 
 //   return Isothermal_Temperature[0];
 // }
+
+// su2double& CConfig::GetIsothermal_TemperatureRef(const std::string& val_marker) {
+
+//   for (unsigned short i = 0; i < nMarker_Isothermal; ++i) {
+//     if (Marker_Isothermal[i] == val_marker) {
+//       return Isothermal_Temperature[i];
+//     }
+//   }
+
+//   // Fallback: be explicit (and ideally warn)
+//   return Isothermal_Temperature[0];
+// }
+
+// const su2double& CConfig::GetIsothermal_TemperatureRef(const std::string& val_marker) const {
+
+//   for (unsigned short i = 0; i < nMarker_Isothermal; ++i) {
+//     if (Marker_Isothermal[i] == val_marker) {
+//       return Isothermal_Temperature[i];
+//     }
+//   }
+// 
+//   return Isothermal_Temperature[0];
+// }
+
 
 su2double CConfig::GetWall_HeatFlux(const string& val_marker) const {
 

@@ -7329,6 +7329,14 @@ public:
    */
   su2double GetIsothermal_Temperature(const string& val_index) const;
 
+
+  // Non-const access for AD registration (returns l-value)
+  su2double& GetIsothermal_TemperatureRef(const std::string& val_marker);
+
+
+  // Optional: const version by ref too
+  const su2double& GetIsothermal_TemperatureRef(const std::string& val_marker) const;
+
   /*!
    * \brief Get the wall heat flux on a constant heat flux boundary.
    * \param[in] val_index - Index corresponding to the constant heat flux boundary.

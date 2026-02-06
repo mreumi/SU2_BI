@@ -412,14 +412,11 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       kind_recording == RECORDING::TAG_CHECK_SOLVER_AND_MESH ||
       kind_recording == RECORDING::SOLUTION_AND_MESH) {
 
-      /*--- Register model parameters as input ---*/
-      if(config[iZone]->GetInvProblem()) {
-        solvers0[ADJFLOW_SOL]->RegisterModelParameters(geometry0, config[iZone]);
-      }
 
     /*--- Register flow and turbulent variables as input ---*/
 
     if (config[iZone]->GetFluidProblem()) {
+      std::cout << "(RegisterInput) Registering flow solution as input for adjoint solver." << std::endl;
       solvers0[ADJFLOW_SOL]->RegisterSolution(geometry0, config[iZone]);
 
       solvers0[ADJFLOW_SOL]->RegisterVariables(geometry0, config[iZone]);
@@ -429,6 +426,7 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       solvers0[ADJTURB_SOL]->RegisterSolution(geometry0, config[iZone]);
     }
     if (config[iZone]->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
+      std::cout << "(RegisterInput) Registering species solution as input for adjoint solver." << std::endl;
       solvers0[ADJSPECIES_SOL]->RegisterSolution(geometry0, config[iZone]);
     }
     if (config[iZone]->GetWeakly_Coupled_Heat()) {
@@ -445,6 +443,12 @@ void CDiscAdjFluidIteration::RegisterInput(CSolver***** solver, CGeometry**** ge
       kind_recording == RECORDING::SOLUTION_AND_MESH ||
       kind_recording == RECORDING::TAG_INIT_SOLVER_AND_MESH ||
       kind_recording == RECORDING::TAG_CHECK_SOLVER_AND_MESH) {
+      
+
+    /*--- Register model parameters as input ---*/
+    if(config[iZone]->GetInvProblem()) {
+      solvers0[ADJFLOW_SOL]->RegisterModelParameters(geometry0, config[iZone]);
+    }
 
       geometry0->RegisterCoordinates();
     }

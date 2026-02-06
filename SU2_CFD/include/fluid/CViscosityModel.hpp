@@ -75,7 +75,7 @@ class CViscosityModel {
         return viscosity_index_;
       }
 
-      std::cout << "Register viscosity in fluid model." << std::endl;
+      std::cout << "[INV-PROB] Register viscosity in fluid model." << std::endl;
       AD::RegisterInput(mu_);
       AD::SetIndex(index, mu_);
 

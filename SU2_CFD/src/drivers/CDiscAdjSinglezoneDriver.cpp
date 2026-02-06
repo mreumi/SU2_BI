@@ -195,12 +195,6 @@ void CDiscAdjSinglezoneDriver::Run() {
                                   solver_container, numerics_container, config_container,
                                   surface_movement, grid_movement, FFDBox, ZONE_0, INST_0);
 
-    if(config->GetInvProblem()) {
-      // Wrapper for AD::GetDerivative to get model parameters sensitivity
-      // std::cout << "[INV-PROB] Computing model parameters sensitivity for inverse problem." << std::endl;
-      solver[MainSolver]->ComputeModelParametersGradient();
-    }
-
     /*--- Clear the stored adjoint information to be ready for a new evaluation. ---*/
 
     AD::ClearAdjoints();
@@ -274,12 +268,12 @@ void CDiscAdjSinglezoneDriver::SetRecording(RECORDING kind_recording){
   if (rank == MASTER_NODE) {
     cout << "\n-------------------------------------------------------------------------\n";
     switch(kind_recording) {
-    case RECORDING::CLEAR_INDICES: cout << "Clearing the computational graph." << endl; break;
-    case RECORDING::MESH_COORDS:   cout << "Storing computational graph wrt MESH COORDINATES." << endl; break;
+    case RECORDING::CLEAR_INDICES: cout << "(SetRecording) CLEAR_INDICES: Clearing the computational graph." << endl; break;
+    case RECORDING::MESH_COORDS:   cout << "(SetRecording) MESH_COORDS: Storing computational graph wrt MESH COORDINATES." << endl; break;
     case RECORDING::SOLUTION_VARIABLES:
-      cout << "Direct iteration to store the primal computational graph." << endl;
-      cout << "Computing residuals to check the convergence of the direct problem." << endl; break;
-    default: break;
+      cout << "(SetRecording) SOLUTION_VARIABLES: Direct iteration to store the primal computational graph." << endl;
+      cout << "(SetRecording) Computing residuals to check the convergence of the direct problem." << endl; break;
+    default: cout << "(SetRecording) DEFAULT: No specific recording action." << endl; break;
     }
   }
 
@@ -289,6 +283,7 @@ void CDiscAdjSinglezoneDriver::SetRecording(RECORDING kind_recording){
 
     AD::StartRecording();
 
+    // includes AD::RegisterInput calls
     iteration->RegisterInput(solver_container, geometry_container, config_container, ZONE_0, INST_0, kind_recording);
   }
 
@@ -298,6 +293,7 @@ void CDiscAdjSinglezoneDriver::SetRecording(RECORDING kind_recording){
                              INST_0, kind_recording);
 
   /*--- Do one iteration of the direct solver ---*/
+  std::cout << "(SetRecording) Running one iteration of the direct solver to store the computational graph." << std::endl;
 
   DirectRun(kind_recording);
 
@@ -311,7 +307,7 @@ void CDiscAdjSinglezoneDriver::SetRecording(RECORDING kind_recording){
 
   /*--- Extract the objective function and store it --- */
 
-  SetObjFunction();
+  SetObjFunction(); // includes AD::RegisterOutput
 
   if (kind_recording != RECORDING::CLEAR_INDICES && config_container[ZONE_0]->GetWrt_AD_Statistics()) {
     AD::PrintStatistics(SU2_MPI::GetComm(), rank == MASTER_NODE);
@@ -427,6 +423,7 @@ void CDiscAdjSinglezoneDriver::SecondaryRecording(){
 
   SetRecording(RECORDING::CLEAR_INDICES);
 
+
   /*--- Store the computational graph of one direct iteration with the secondary variables as input. ---*/
 
   SetRecording(SecondaryVariables);
@@ -447,12 +444,20 @@ void CDiscAdjSinglezoneDriver::SecondaryRecording(){
   /*--- Extract the computed sensitivity values. ---*/
 
   if (SecondaryVariables == RECORDING::MESH_COORDS) {
+    std::cout << "(SecondaryRecording) RECORDING::MESH_COORDS." << std::endl;
       solver[MainSolver]->SetSensitivity(geometry, config);
+
+    if(config->GetInvProblem()) {
+      // Wrapper for AD::GetDerivative to get model parameters sensitivity
+      std::cout << "[INV-PROB] Computing model parameters sensitivity for inverse problem." << std::endl;
+      solver[ADJFLOW_SOL]->ComputeModelParametersGradient();
+    }
     }
     // solver[MainSolver]->SetSensitivity(geometry, config);
     // solver[ADJFLOW_SOL]->GetModelParametersSensitivity();
   
   else { // MESH_DEFORM
+    std::cout << "(SecondaryRecording) ELSE." << std::endl;
     solver[ADJMESH_SOL]->SetSensitivity(geometry, config, solver[MainSolver]);
   }
 

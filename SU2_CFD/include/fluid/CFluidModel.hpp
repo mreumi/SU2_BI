@@ -77,6 +77,10 @@ class CFluidModel {
   unique_ptr<CConductivityModel> ThermalConductivity; /*!< \brief Thermal Conductivity Model */
   unique_ptr<CDiffusivityModel> MassDiffusivity;      /*!< \brief Mass Diffusivity Model */
 
+  // e.g. member variables in your registration owner:
+  // std::unordered_map<std::string,int> isoT_index_;
+  // std::unordered_set<std::string> isoT_registered_;
+
   /*!
    * \brief Instantiate the right type of viscosity model based on config.
    */
@@ -124,6 +128,7 @@ class CFluidModel {
   }
 
   inline vector<int> RegisterCustomValues (CConfig* config) { 
+    std::cout << "[INV-PROB] Register custom model parameters for inverse problems.\n";
 
     // Get the list of IP parameters
     const string* ip_pars = config->GetIP_Parameters();
@@ -195,10 +200,29 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
           << " idx=" << assigned
           << std::endl;
 
-  ++index; // should be index++ ?!?! or just index 
-
+  ++index; 
   return assigned;
 }
+
+// ALTERNATIVE (MIGHT BE MORE COMPACT BUT NEEDS TESTING)
+// inline int RegisterIsothermalWallTemp(const std::string& marker,
+//                                       CConfig* config,
+//                                       int& index) {
+
+//   // Already registered?
+//   auto it = isoT_index_.find(marker);
+//   if (it != isoT_index_.end()) return it->second;
+
+//   su2double& Twall = config->GetIsothermal_TemperatureRef(marker);
+
+//   std::cout << "[INV-PROB] Register isothermal wall temperature for marker '" << marker << "'.\n";
+//   AD::RegisterInput(Twall);
+//   AD::SetIndex(index, Twall);
+
+//   isoT_index_[marker] = index;
+//   return index++;
+// }
+
 
 inline int RegisterInletVelocityFactor(const std::string& marker,
                                        CConfig* config,

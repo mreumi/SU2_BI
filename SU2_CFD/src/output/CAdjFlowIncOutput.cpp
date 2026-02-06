@@ -284,24 +284,24 @@ void CAdjFlowIncOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CS
     SetHistoryOutputValue("DEFORM_RESIDUAL", log10(mesh_solver->System.GetResidual()));
   }
 
-  if (config->GetInvProblem()) {
-    vector<su2double> ModelDiscrepancyGradient = adjflow_solver->GetModelParametersGradient(); 
+  // if (config->GetInvProblem()) {
+  //   vector<su2double> ModelDiscrepancyGradient = adjflow_solver->GetModelParametersGradient(); 
 
-    // Write gradient to file and history (needs better location ?)
-    ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
-    for (size_t j = 0; j < ModelDiscrepancyGradient.size(); ++j) {
-        GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << '\n';
-        stringstream ss;
-        ss << "INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_" << j; // TODO: rename to variable name instead of index
-        string field_name = ss.str();
-        SetHistoryOutputValue(field_name, ModelDiscrepancyGradient[j]);
-    }
-    GradientModelParameters.close();
+  //   // Write gradient to file and history (needs better location ?)
+  //   ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
+  //   for (size_t j = 0; j < ModelDiscrepancyGradient.size(); ++j) {
+  //       GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << '\n';
+  //       stringstream ss;
+  //       ss << "INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_" << j; // TODO: rename to variable name instead of index
+  //       string field_name = ss.str();
+  //       SetHistoryOutputValue(field_name, ModelDiscrepancyGradient[j]);
+  //   }
+  //   GradientModelParameters.close();
 
-    // Norm of the gradient
-    SetHistoryOutputValue("INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_NORM", adjflow_solver->GetModelParametersGradientNorm());
+  //   // Norm of the gradient
+  //   SetHistoryOutputValue("INVERSE_PROBLEM_MODEL_DISCREPANCY_GRAD_NORM", adjflow_solver->GetModelParametersGradientNorm());
     
-  }
+  // }
 
   LoadHistoryDataAdjScalar(config, solver);
 
