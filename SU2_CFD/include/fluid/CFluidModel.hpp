@@ -137,7 +137,7 @@ class CFluidModel {
     vector<int> indices;
     indices.reserve(n_IPpars);
 
-    unordered_map<string, int> name_to_index;   // avoid duplicates by name
+    unordered_map<string, int> name_to_index;   // avoid duplicates by name, maps parameter name to AD index
     int index = 0; // starting AD index (would be better to get from outside?)
 
     // Go through all requested IP parameters and register them
@@ -162,9 +162,8 @@ class CFluidModel {
         const std::string marker = Trim(ExtractKeyValueDash(token, "ISOTHERMAL_TEMPERATURE"));
         idx = RegisterIsothermalWallTemp(marker, config, index);
       }
-      else if (HasKeyValueDash(token, "INLET_VELOCITY_FACTOR")) {
-        const std::string marker = Trim(ExtractKeyValueDash(token, "INLET_VELOCITY_FACTOR"));
-        idx = RegisterInletVelocityFactor(marker, config, index);
+      else if (token == "INLET_VELOCITY_FACTOR") {
+        idx = RegisterInletVelocityFactor(config, index);
       }
       else {
         std::cout << "/!\\ Warning: Unknown IP parameter '" << token << "' (skipping)\n";
@@ -186,8 +185,8 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
   }
 
   // Register a correction variable (not the base temperature)
-  su2double& Tcor = config->GetIsothermal_TemperatureCorrectionRef(marker);
-  Tcor = 0.0; // baseline: no correction unless optimizer changes it
+  su2double& Tcor = config->GetIsothermal_TemperatureCorrectionRef(marker); // get the reference
+  Tcor = 0.0; // set the value: no correction 
 
   AD::RegisterInput(Tcor);
   AD::SetIndex(index, Tcor);
@@ -195,8 +194,7 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
   const int assigned = index;
   config->SetIsothermalTempCorrectionRegistered(marker, assigned);
 
-  std::cout << "[ISO-REG] stored key='" << marker << "'"
-          << " registered=1"
+  std::cout << "[INV-PROB] registered wall temp for key='" << marker << "'"
           << " idx=" << assigned
           << std::endl;
 
@@ -224,25 +222,22 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
 // }
 
 
-inline int RegisterInletVelocityFactor(const std::string& marker,
-                                       CConfig* config,
+inline int RegisterInletVelocityFactor(CConfig* config,
                                        int& index) {
 
-  if (config->IsInletVelFactorRegistered(marker)) {
-    return config->GetInletVelFactorIndex(marker);
+  // Check if registered. If yes, return existing index
+  if (config->IsInletVelFactorRegistered()) {
+    return config->GetInletVelFactorIndex();
   }
 
-  su2double& Ucorr = config->Get_InletVelocityFactorRef(marker);
-  Ucorr = 0.0;  // baseline: scale = 1.0 + Ucorr
-
-  AD::RegisterInput(Ucorr);
-  AD::SetIndex(index, Ucorr);
-
+  su2double& alpha = config->Get_InletVelocityFactorRef();
+  
+  AD::RegisterInput(alpha);
+  AD::SetIndex(index, alpha);
   const int assigned = index;
-  config->SetInletVelFactorRegistered(marker, assigned);
+  config->SetInletVelFactorRegistered(assigned);
 
-  std::cout << "[INLET-U-REG] stored key='" << marker << "'"
-            << " registered=1"
+  std::cout << "[INV-PROB] registered inflow scale"
             << " idx=" << assigned
             << std::endl;
 

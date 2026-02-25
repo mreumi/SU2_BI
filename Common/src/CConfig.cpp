@@ -1596,6 +1596,7 @@ void CConfig::SetConfig_Options() {
   addBoolOption("SPECIFIED_INLET_PROFILE", Inlet_From_File, false);
   /*!\brief INLET_FILENAME \n DESCRIPTION: Input file for a specified inlet profile (w/ extension) \n DEFAULT: inlet.dat \ingroup Config*/
   addStringOption("INLET_FILENAME", Inlet_Filename, string("inlet.dat"));
+  addDoubleOption("INLET_PROFILE_SCALE", InletVelocity_Factor, 1.0);
   /*!\brief INLET_MATCHING_TOLERANCE
    * \n DESCRIPTION: If a file is provided to specify the inlet profile,
    * this tolerance will be used to match the coordinates in the input file to
@@ -9188,7 +9189,7 @@ su2double CConfig::GetInletPtotal(const string& val_marker) const {
 void CConfig::SetInletPtotal(su2double val_pressure, const string& val_marker) {
   unsigned short iMarker_Inlet;
   for (iMarker_Inlet = 0; iMarker_Inlet < nMarker_Inlet; iMarker_Inlet++)
-    if (Marker_Inlet[iMarker_Inlet] == val_marker)
+    if (Marker_Inlet[iMarker_Inlet] == val_marker)  
       Inlet_Ptotal[iMarker_Inlet] = val_pressure;
 }
 
@@ -9519,24 +9520,26 @@ void CConfig::SetIsothermalTempCorrectionRegistered(const std::string& marker, i
   IsoTemp_Correction_Registered_[marker] = true;
 }
 
-su2double& CConfig::Get_InletVelocityFactorRef(const std::string& marker) const {
-  // operator[] will default-construct (0.0) if missing
-  return InletVelocity_Factor_AD_[marker];
+// su2double& CConfig::Get_InletVelocityFactorRef(const std::string& marker) const {
+//   // operator[] will default-construct (0.0) if missing
+//   return InletVelocity_Factor_AD_[marker];
+// }
+su2double& CConfig::Get_InletVelocityFactorRef() const {
+  // Insert with default alpha = 1.0 if missing, and return a stable reference.
+  return InletVelocity_Factor;
 }
 
-bool CConfig::IsInletVelFactorRegistered(const std::string& marker) const {
-  auto it = InletVelocity_Factor_Registered_.find(marker);
-  return (it != InletVelocity_Factor_Registered_.end()) ? it->second : false;
+bool CConfig::IsInletVelFactorRegistered() const {
+  return InletVelocity_Factor_Registered_;
 }
 
-int CConfig::GetInletVelFactorIndex(const std::string& marker) const {
-  auto it = InletVelocity_Factor_Index_.find(marker);
-  return (it != InletVelocity_Factor_Index_.end()) ? it->second : -1;
+int CConfig::GetInletVelFactorIndex() const {
+  return InletVelocity_Factor_Index_;
 }
 
-void CConfig::SetInletVelFactorRegistered(const std::string& marker, int idx) const {
-  InletVelocity_Factor_Index_[marker] = idx;
-  InletVelocity_Factor_Registered_[marker] = true;
+void CConfig::SetInletVelFactorRegistered(int idx) const {
+  InletVelocity_Factor_Index_ = idx;
+  InletVelocity_Factor_Registered_ = true;
 }
 
 su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) const {
@@ -9545,13 +9548,6 @@ su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) cons
     if (Marker_Isothermal[iMarker_Isothermal] == val_marker) {
       const su2double Tbase = Isothermal_Temperature[iMarker_Isothermal];
       const su2double Tcor  = GetIsothermal_TemperatureCorrectionRef(val_marker); // 0.0 unless registered/modified
-      
-      // const su2double& Tcor_ref = GetIsothermal_TemperatureCorrectionRef(val_marker);
-
-      // // Debug output
-      // const bool has_cor = IsoTemp_Correction_AD_.count(val_marker);
-      // const bool is_reg  = IsoTemp_Correction_Registered_.count(val_marker) ?
-      //                     IsoTemp_Correction_Registered_.at(val_marker) : false;
 
       return Tbase + Tcor;
     }
