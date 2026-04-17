@@ -2254,6 +2254,8 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
   const bool viscous = config->GetViscous();
 
   string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
+  unsigned short iInletMarker = config->GetInletMarkerIndex(Marker_Tag);
+
 
   INLET_TYPE Kind_Inlet = config->GetKind_Inc_Inlet(Marker_Tag);
 
@@ -2313,7 +2315,7 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
     /*--- The velocity is either prescribed or computed from total pressure. ---*/
 
-    su2double alpha;
+    su2double InletProfileFactor;
 
     switch (Kind_Inlet) {
 
@@ -2326,12 +2328,13 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
         Vel_Mag  = Inlet_Ptotal[val_marker][iVertex]/config->GetVelocity_Ref();
         //std::cout << "()()() val_marker: " << val_marker << " Marker_Tag: " << Marker_Tag << std::endl;
         /*--- Apply correction factor to inlet velocity which can be registered as an input for inverse problems. ---*/
-        alpha = config->Get_InletVelocityFactorRef();
+        InletProfileFactor = config->GetInletProfileFactorRef(iInletMarker);
+        // std::cout << "[IN-PROB]: InletProfileFactor: " << InletProfileFactor << std::endl;
 
         /*--- Store the velocity in the primitive variable vector. ---*/
 
         for (iDim = 0; iDim < nDim; iDim++)
-          V_inlet[iDim+prim_idx.Velocity()] = alpha*Vel_Mag*UnitFlowDir[iDim];
+          V_inlet[iDim+prim_idx.Velocity()] = InletProfileFactor*Vel_Mag*UnitFlowDir[iDim];
 
         /*--- Dirichlet condition for temperature (if energy is active) ---*/
 

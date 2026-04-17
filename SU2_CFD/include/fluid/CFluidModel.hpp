@@ -183,9 +183,9 @@ class CFluidModel {
           names.emplace_back("ISOTHERMAL_TEMPERATURE");
         }
       }
-      else if (token == "INLET_VELOCITY_FACTOR") {
-        idx = RegisterInletVelocityFactor(config, index);
-        std::cout << "[INV-PROB] Registered inlet velocity factor with index " << idx << ".\n";
+      else if (HasKeyValueDash(token, "INLET_VELOCITY_FACTOR")) {
+        const std::string marker = Trim(ExtractKeyValueDash(token, "INLET_VELOCITY_FACTOR"));
+        idx = RegisterInletVelocityFactor(marker, config, index);
         if (idx >= 0) {
           indices.push_back(idx);
           names.emplace_back("INLET_VELOCITY_FACTOR");
@@ -266,27 +266,56 @@ inline int RegisterIsothermalWallTemp(const std::string& marker,
 // }
 
 
-inline int RegisterInletVelocityFactor(CConfig* config,
-                                       int& index) {
+inline int RegisterInletVelocityFactor(const std::string& marker,
+                                    CConfig* config,
+                                    int& index) {
+
+  
+  unsigned short iMarker = config->GetInletMarkerIndex(marker);
 
   // Check if registered. If yes, return existing index
-  if (config->IsInletVelFactorRegistered()) {
-    return config->GetInletVelFactorIndex();
+  if (config->IsInletProfileFactorRegistered(iMarker)) {
+    return config->GetInletProfileFactorIndex(iMarker);
   }
 
-  su2double& alpha = config->Get_InletVelocityFactorRef();
+  // Register a correction variable (not the base temperature)
+  su2double& alpha = config->GetInletProfileFactorRef(iMarker); // get the reference
 
   AD::RegisterInput(alpha);
   AD::SetIndex(index, alpha);
+
   const int assigned = index;
-  config->SetInletVelFactorRegistered(assigned);
+  config->SetInletProfileFactorRegistered(iMarker, assigned);
 
-  std::cout << "[INV-PROB] registered inflow factor for inverse problem."
-            << std::endl;
+  std::cout << "[INV-PROB] registered inlet velocity factor for key='" << marker << "'"
+          << " idx=" << assigned
+          << std::endl;
 
-  ++index;
+  ++index; 
   return assigned;
 }
+
+// inline int RegisterInletVelocityFactor(CConfig* config,
+//                                        int& index) {
+
+//   // Check if registered. If yes, return existing index
+//   if (config->IsInletVelFactorRegistered()) {
+//     return config->GetInletVelFactorIndex();
+//   }
+
+//   su2double& alpha = config->Get_InletVelocityFactorRef();
+
+//   AD::RegisterInput(alpha);
+//   AD::SetIndex(index, alpha);
+//   const int assigned = index;
+//   config->SetInletVelFactorRegistered(assigned);
+
+//   std::cout << "[INV-PROB] registered inflow factor for inverse problem."
+//             << std::endl;
+
+//   ++index;
+//   return assigned;
+// }
 
 
   /*!

@@ -1280,10 +1280,20 @@ private:
   mutable std::unordered_map<std::string, int>       IsoTemp_Correction_Index_;
   mutable std::unordered_map<std::string, bool>      IsoTemp_Correction_Registered_;
 
-  /*--- Inlet velocity factor correction options to register them for inverse problems ---*/
-  mutable su2double InletVelocity_Factor;
-  mutable int InletVelocity_Factor_Index_ = -1;
-  mutable bool InletVelocity_Factor_Registered_ = false;
+  /*--- Inlet velocity factor correction options to register them for inverse problems -> single scale is deprecated ---*/
+  // mutable std::unordered_map<std::string, su2double> InletProfileFactor_;
+  // mutable std::unordered_map<std::string, int>       InletProfileFactorIndex_;
+  // mutable std::unordered_map<std::string, bool>      InletProfileFactorRegistered_;
+
+  std::vector<su2double> InletProfileFactor_;
+  std::vector<int>       InletProfileFactorIndex_;
+  std::vector<bool>      InletProfileFactorRegistered_;
+  
+
+  /*--- Options for inverse problems---*/
+  unsigned short nInletProfileFactors;  /*!< \brief Number of inlet profile factors. */
+  string *Marker_InletProfile;          /*!< \brief Outlet flow markers. */
+  su2double *InletProfileFactor_Config;        /*!< \brief Specified back pressures (static) for outlet boundaries. */
 
   /*--- Additional flamelet solver options ---*/
   FluidFlamelet_ParsedOptions flamelet_ParsedOptions; /*!< \brief Additional flamelet solver options */
@@ -1748,10 +1758,14 @@ public:
   void SetIsothermalTempCorrectionRegistered(const std::string& marker, int idx) const;
 
   /* Helper functions for inverse problems, including a multiplicative correction to inflow velocity as input */
-  su2double& Get_InletVelocityFactorRef() const;
-  bool IsInletVelFactorRegistered() const;
-  int  GetInletVelFactorIndex() const;
-  void SetInletVelFactorRegistered(int idx) const;
+  // su2double& Get_InletVelocityFactorRef() const;
+  
+  unsigned short GetInletMarkerIndex(const std::string& marker) const;
+  su2double& GetInletProfileFactorRef(unsigned short iMarker);
+  void SetInletProfileFactor(unsigned short iMarker, su2double val_factor);
+  bool IsInletProfileFactorRegistered(unsigned short iMarker) const;
+  int  GetInletProfileFactorIndex(unsigned short iMarker) const;
+  void SetInletProfileFactorRegistered(unsigned short iMarker, int idx);
 
   /*!
    * \brief Get the p-norm for heat-flux objective functions (adjoint problem).

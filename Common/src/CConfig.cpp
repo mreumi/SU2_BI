@@ -1596,7 +1596,10 @@ void CConfig::SetConfig_Options() {
   addBoolOption("SPECIFIED_INLET_PROFILE", Inlet_From_File, false);
   /*!\brief INLET_FILENAME \n DESCRIPTION: Input file for a specified inlet profile (w/ extension) \n DEFAULT: inlet.dat \ingroup Config*/
   addStringOption("INLET_FILENAME", Inlet_Filename, string("inlet.dat"));
-  addDoubleOption("INLET_PROFILE_SCALE", InletVelocity_Factor, 1.0);
+  //addDoubleOption("INLET_PROFILE_SCALE", InletVelocity_Factor, 1.0);
+  //addStringListOption("INLET_PROFILE_FACTORS", nInletProfileFactors, InletProfileFactors);
+  addStringDoubleListOption("INLET_PROFILE_FACTORS", nInletProfileFactors, Marker_InletProfile, InletProfileFactor_Config);
+
   /*!\brief INLET_MATCHING_TOLERANCE
    * \n DESCRIPTION: If a file is provided to specify the inlet profile,
    * this tolerance will be used to match the coordinates in the input file to
@@ -5748,6 +5751,21 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
     SU2_MPI::Error("BOUNDED_SCALAR discretization can only be used for incompressible problems.", CURRENT_FUNCTION);
   }
 
+  //--- Set the inlet profile factors ---//
+  InletProfileFactor_.assign(nMarker_Inlet, 1.0);
+  InletProfileFactorIndex_.assign(nMarker_Inlet, -1);
+  InletProfileFactorRegistered_.assign(nMarker_Inlet, false);
+
+  for (unsigned short i = 0; i < nInletProfileFactors; ++i) {
+
+    const std::string& marker = Marker_InletProfile[i];
+    su2double value = InletProfileFactor_Config[i];
+
+    unsigned short iMarker = GetInletMarkerIndex(marker);
+
+    InletProfileFactor_[iMarker] = value;
+  }
+
 }
 
 void CConfig::SetMarkers(SU2_COMPONENT val_software) {
@@ -9525,22 +9543,52 @@ void CConfig::SetIsothermalTempCorrectionRegistered(const std::string& marker, i
 //   // operator[] will default-construct (0.0) if missing
 //   return InletVelocity_Factor_AD_[marker];
 // }
-su2double& CConfig::Get_InletVelocityFactorRef() const {
-  // Insert with default alpha = 1.0 if missing, and return a stable reference.
-  return InletVelocity_Factor;
+// su2double& CConfig::Get_InletVelocityFactorRef() const {
+//   // Insert with default alpha = 1.0 if missing, and return a stable reference.
+//   return InletVelocity_Factor;
+// }
+
+unsigned short CConfig::GetInletMarkerIndex(const std::string& marker) const {
+  for (unsigned short i = 0; i < nMarker_Inlet; ++i) {
+    if (Marker_Inlet[i] == marker) return i;
+  }
+
+  SU2_MPI::Error("Inlet marker not found: " + marker, CURRENT_FUNCTION);
+  return 0;
 }
 
-bool CConfig::IsInletVelFactorRegistered() const {
-  return InletVelocity_Factor_Registered_;
+su2double& CConfig::GetInletProfileFactorRef(unsigned short iMarker) {
+  return InletProfileFactor_[iMarker];
 }
 
-int CConfig::GetInletVelFactorIndex() const {
-  return InletVelocity_Factor_Index_;
+void CConfig::SetInletProfileFactor(unsigned short iMarker, su2double val_factor) {
+  InletProfileFactor_[iMarker] = val_factor;
 }
 
-void CConfig::SetInletVelFactorRegistered(int idx) const {
-  InletVelocity_Factor_Index_ = idx;
-  InletVelocity_Factor_Registered_ = true;
+bool CConfig::IsInletProfileFactorRegistered(unsigned short iMarker) const {
+  return InletProfileFactorRegistered_[iMarker];
+}
+
+// bool CConfig::IsInletVelFactorRegistered() const {
+//   return InletVelocity_Factor_Registered_;
+// }
+
+// int CConfig::GetInletVelFactorIndex() const {
+//   return InletVelocity_Factor_Index_;
+// }
+
+// void CConfig::SetInletVelFactorRegistered(int idx) const {
+//   InletVelocity_Factor_Index_ = idx;″
+//   InletVelocity_Factor_Registered_ = true;
+// }
+
+int CConfig::GetInletProfileFactorIndex(unsigned short iMarker) const {
+  return InletProfileFactorIndex_[iMarker];
+}
+
+void CConfig::SetInletProfileFactorRegistered(unsigned short iMarker, int idx){
+  InletProfileFactorIndex_[iMarker]       = idx;
+  InletProfileFactorRegistered_[iMarker]  = true;
 }
 
 su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) const {
