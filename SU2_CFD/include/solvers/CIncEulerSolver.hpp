@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <iostream>
 #include "CFVMFlowSolverBase.hpp"
 #include "../variables/CIncEulerVariable.hpp"
 

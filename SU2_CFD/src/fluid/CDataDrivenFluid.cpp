@@ -26,6 +26,7 @@
  */
 
 #include "../../include/fluid/CDataDrivenFluid.hpp"
+#include <iostream>
 #if defined(HAVE_MLPCPP)
 #include "../../../subprojects/MLPCpp/include/CLookUp_ANN.hpp"
 #define USE_MLPCPP
@@ -65,6 +66,7 @@ CDataDrivenFluid::CDataDrivenFluid(const CConfig* config, bool display) : CFluid
         cout << "Physics-informed approach currently only works with MLP-based tabulation." << endl;
 
       lookup_table = new CLookUpTable(datadriven_fluid_options.datadriven_filenames[0], varname_rho, varname_e);
+      //std::cout << "Created new LUT in DataDrivenFluid with address {}{}{}" << (void*)lookup_table << std::endl;
       break;
     default:
       break;

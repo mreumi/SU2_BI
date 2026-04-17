@@ -26,6 +26,7 @@
  */
 
 #include "../../include/solvers/CNSSolver.hpp"
+#include <iostream>
 #include "../../include/variables/CNSVariable.hpp"
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"

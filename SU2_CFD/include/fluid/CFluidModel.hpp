@@ -31,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <unordered_set>
+#include <utility>
 
 #include "../../../Common/include/CConfig.hpp"
 #include "../../../Common/include/basic_types/datatype_structure.hpp"
@@ -40,7 +41,8 @@
 
 using namespace std;
 
-class CLookUpTable;
+//class CLookUpTable;
+#include "../../../Common/include/containers/CLookUpTable.hpp"
 /*!
  * \class CFluidModel
  * \brief Main class for defining the Thermo-Physical Model
@@ -103,6 +105,9 @@ class CFluidModel {
  public:
   virtual ~CFluidModel() {}
 
+  // Virtual getter for look-up table, to be overridden by data-driven fluid model if needed
+  virtual CLookUpTable* GetLookUpTable() { return nullptr; }
+  virtual const CLookUpTable* GetLookUpTable() const { return nullptr; }
     
   // Helper functions for parsing IP parameter tokens
   static inline bool HasKeyValueDash(const std::string& token,
@@ -127,7 +132,7 @@ class CFluidModel {
     return s.substr(b, e - b + 1);
   }
 
-  inline vector<int> RegisterCustomValues (CConfig* config) { 
+  inline std::pair<vector<int>, vector<string>> RegisterCustomValues(CConfig* config) { 
     std::cout << "[INV-PROB] Register custom model parameters for inverse problems.\n";
 
     // Get the list of IP parameters
@@ -135,9 +140,13 @@ class CFluidModel {
     unsigned short n_IPpars = config->GetnIP_Parameters();
 
     vector<int> indices;
-    indices.reserve(n_IPpars);
+    vector<string> names;
+    indices.reserve(n_IPpars); // for LUT, we actually need more than n_IPpars indices. Could be improved
+    names.reserve(n_IPpars);
+    // Track whether a token has already been handled.
+    std::unordered_map<std::string, bool> token_done;
 
-    unordered_map<string, int> name_to_index;   // avoid duplicates by name, maps parameter name to AD index
+    // unordered_map<string, int> name_to_index;   // avoid duplicates by name, maps parameter name to AD index
     int index = 0; // starting AD index (would be better to get from outside?)
 
     // Go through all requested IP parameters and register them
@@ -146,33 +155,68 @@ class CFluidModel {
       const string& token = ip_pars[i];
         
       // If we have seen it, reuse the same index (do not register again)
-      auto it = name_to_index.find(token);
-      if (it != name_to_index.end()) {
-        indices.push_back(it->second);
+      if (token_done[token]) {
+        // Already registered this token; don't re-register or push again.
         continue;
       }
+      // auto it = name_to_index.find(token);
+      // if (it != name_to_index.end()) {
+      //   indices.push_back(it->second);
+      //   continue;
+      // }
 
       // First time seeing this parameter: register it
       int idx = -1;
 
       if (token == "VISCOSITY") {
         idx = LaminarViscosity->RegisterViscosity(index);
+        if (idx >= 0){
+          indices.push_back(idx);
+          names.emplace_back("VISCOSITY");
+        }
       } 
       else if (HasKeyValueDash(token, "ISOTHERMAL_TEMPERATURE")) {
         const std::string marker = Trim(ExtractKeyValueDash(token, "ISOTHERMAL_TEMPERATURE"));
         idx = RegisterIsothermalWallTemp(marker, config, index);
+        if (idx >= 0){
+          indices.push_back(idx);
+          names.emplace_back("ISOTHERMAL_TEMPERATURE");
+        }
       }
       else if (token == "INLET_VELOCITY_FACTOR") {
         idx = RegisterInletVelocityFactor(config, index);
+        std::cout << "[INV-PROB] Registered inlet velocity factor with index " << idx << ".\n";
+        if (idx >= 0) {
+          indices.push_back(idx);
+          names.emplace_back("INLET_VELOCITY_FACTOR");
+        }
+      }
+      else if (token == "LUT"){
+        CLookUpTable* LUT = GetLookUpTable();
+        std::cout << "{}{}{} registered LUT address in fluid model is {}{}{}" << (void*)LUT << std::endl;
+        if (!LUT) {
+          std::cout << "[INV-PROB] /!\\ Warning: LUT requested but this fluid model has no LUT (skipping)\n";
+          idx = -1;
+        } else {
+          auto [idx_lut, var_names] = LUT->RegisterLUT(index);
+          for (size_t i = 0; i < idx_lut.size(); ++i) {
+            if (idx_lut[i] >= 0){
+              indices.push_back(idx_lut[i]);
+              names.emplace_back(var_names[i]);
+            } else {
+              std::cout << "[INV-PROB] /!\\ Warning: LUT variable index is negative (skipping)\n";
+            }
+          }
+        }
       }
       else {
-        std::cout << "/!\\ Warning: Unknown IP parameter '" << token << "' (skipping)\n";
+        std::cout << "[INV-PROB] /!\\ Warning: Unknown IP parameter '" << token << "' (skipping)\n";
       }
 
-      name_to_index[token] = idx;
-      indices.push_back(idx);
+      token_done[token] = true;
+      // name_to_index[token] = idx;
     }
-    return indices;
+    return std::make_pair(indices, names);
   }
   
 inline int RegisterIsothermalWallTemp(const std::string& marker,
@@ -231,14 +275,13 @@ inline int RegisterInletVelocityFactor(CConfig* config,
   }
 
   su2double& alpha = config->Get_InletVelocityFactorRef();
-  
+
   AD::RegisterInput(alpha);
   AD::SetIndex(index, alpha);
   const int assigned = index;
   config->SetInletVelFactorRegistered(assigned);
 
-  std::cout << "[INV-PROB] registered inflow scale"
-            << " idx=" << assigned
+  std::cout << "[INV-PROB] registered inflow factor for inverse problem."
             << std::endl;
 
   ++index;
@@ -514,4 +557,6 @@ inline int RegisterInletVelocityFactor(CConfig* config,
    * \return Newton solver iteration count at termination.
    */
   virtual unsigned long GetnIter_Newton() { return 0; }
+
+  
 };

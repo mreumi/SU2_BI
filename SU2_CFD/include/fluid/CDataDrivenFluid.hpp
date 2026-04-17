@@ -178,6 +178,9 @@ class CDataDrivenFluid final : public CFluidModel {
   CDataDrivenFluid(const CConfig* config, bool display = true);
 
   ~CDataDrivenFluid();
+
+  CLookUpTable* GetLookUpTable() override { return lookup_table; }
+  const CLookUpTable* GetLookUpTable() const override { return lookup_table; }
   /*!
    * \brief Set the Dimensionless State using Density and Internal Energy.
    * \param[in] rho - first thermodynamic variable (density).

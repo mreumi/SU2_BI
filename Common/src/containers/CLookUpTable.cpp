@@ -25,6 +25,7 @@
  * License along with SU2. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #include <utility>
 
 #include "../../../Common/include/containers/CLookUpTable.hpp"
@@ -818,4 +819,48 @@ bool CLookUpTable::TryGetVarIndex(const std::string& var_name, unsigned long& id
   if (it == names_var.end()) return false;
   idx = static_cast<unsigned long>(std::distance(names_var.begin(), it));
   return true;
+}
+
+std::pair<std::vector<int>, std::vector<std::string>> CLookUpTable::RegisterLUT(int &index) {
+  // function to register LUT in the AD tape. If already registered, return the existing index matrix, otherwise register it and return new index matrix.
+  if (LUT_registered_) {
+    return std::make_pair(LUT_indices_, LUT_variable_names_);
+  }
+  std::cout << "[INV-PROB] Registering LUT variables...\n";
+  std::cout << "{}{}{} for LUT with address {}{}{}\n"<< this << std::endl;
+
+  const unsigned nVars = names_var.size();
+  
+  // Size LUT_indices_ to hold the indices for each level and variable at each point in the table
+  unsigned int n_params = 0;
+  for (unsigned i_level = 0; i_level < n_table_levels; ++i_level) {
+    for (unsigned iVar = 0; iVar < nVars; ++iVar) {
+      n_params += n_points[i_level];
+      }
+  }
+  LUT_indices_.resize(n_params);
+  LUT_variable_names_.resize(n_params);
+  
+  // Assign an AD index to each variable at each point in the LUT and store it in LUT_indices_
+  unsigned int pt_counter_ = 0;
+  for (unsigned i_level = 0; i_level < n_table_levels; ++i_level) {
+    for (auto iVar = 0u; iVar < nVars; iVar++) {
+      su2double* samples = GetDataP(names_var[iVar], i_level);
+
+      for (unsigned p = 0; p < n_points[i_level]; ++p) {
+        // Create a unique variable name for each point in the LUT for debugging purposes
+        su2double value = samples[p];
+        string var_name = names_var[iVar] + "_level" + std::to_string(i_level) + "_point" + std::to_string(p);
+        LUT_variable_names_[pt_counter_] = var_name;
+        // Get value of variable at current point in table
+        su2double& x = samples[p];
+        AD::RegisterInput(x);
+        AD::SetIndex(index, x);
+        LUT_indices_[pt_counter_++] = index++;
+      }
+    }
+  }
+  // std::cout << "done registering LUT variables." << std::endl;
+  LUT_registered_ = true;
+  return std::make_pair(LUT_indices_, LUT_variable_names_);
 }

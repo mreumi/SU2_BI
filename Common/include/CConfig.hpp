@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include "code_config.hpp"
 #include "parallelization/mpi_structure.hpp"
 
 #include <iostream>
@@ -234,6 +235,8 @@ private:
 
   string TargetVelocityData_Filename;  /*!< \brief Filename specifying an target data file. */
   string TargetDistanceField_Filename; /*!< \brief Filename specifying a target distance field file e.g. for flame location. */
+  string LUT_Var_For_FlameShape_Disc;  /*!< \brief LUT variable used for flameshape discrepancy. */
+  su2double threshold_FlameShape_Disc; /*!< \brief Threshold used for evaluating the flame shape discrepancy. */
 
   string *Marker_Euler,           /*!< \brief Euler wall markers. */
   *Marker_FarField,               /*!< \brief Far field markers. */
@@ -5789,6 +5792,11 @@ public:
   string GetTargetVelocityData_FileName(void) const { return TargetVelocityData_Filename; }
   
   string GetTargetDistanceField_Filename(void) const { return TargetDistanceField_Filename; }
+
+  string GetLUT_Var_Name_For_FlameShape_Disc(void) const {return LUT_Var_For_FlameShape_Disc; };  /*!< \brief LUT variable used for flameshape discrepancy. */
+  
+  su2double GetThreshold_FlameShape_Disc(void) const { return threshold_FlameShape_Disc; };  /*!< \brief Threshold used for evaluating the flame shape discrepancy. */
+
   /*!
    * \brief Add any numbers necessary to the filename (iteration number, zone ID ...)
    * \param[in] filename - the base filename.

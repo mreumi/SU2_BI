@@ -59,7 +59,9 @@ protected:
   su2double Total_Sens_ModVel;   /*!< \brief Total sensitivity to inlet velocity (incompressible). */
   su2double Mach, Alpha, Beta, Temperature, BPressure, ModVel;
   su2double TemperatureRad, Total_Sens_Temp_Rad;
+  
   vector<int> CustomValue_Indices; /*!< \brief Indices of custom model parameters registered on the tape. */
+  vector<string> CustomValue_Names; /*!< \brief Names of custom model parameters registered on the tape. */
 
   CDiscAdjVariable* nodes = nullptr;  /*!< \brief The highest level in the variable hierarchy this solver can safely use. */
 

@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <iostream>
 #include "../gradients/computeGradientsGreenGauss.hpp"
 #include "../gradients/computeGradientsLeastSquares.hpp"
 #include "../limiters/computeLimiters.hpp"
@@ -2934,7 +2935,7 @@ su2double CFVMFlowSolverBase<V,R>::EvaluateCommonObjFunc(const CConfig& config) 
       objFun += weight*Total_CEquivArea;
       break;
     case THRUST_COEFFICIENT:
-      objFun += weight * TotalCoeff.CT;
+      objFun += weight * TotalCoeff.CT; 
       break;
     case TORQUE_COEFFICIENT:
       objFun += weight * TotalCoeff.CQ;

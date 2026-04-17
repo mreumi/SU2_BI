@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "../../Common/include/option_structure.hpp"
+#include "C2DContainer.hpp"
 #include "CFileReaderLUT.hpp"
 #include "CTrapezoidalMap.hpp"
 
@@ -80,6 +81,11 @@ class CLookUpTable {
    */
   su2vector<su2activematrix> table_data;
 
+  // Parameters for inverse problems:
+  bool LUT_registered_ = false;
+  std::vector<int> LUT_indices_; // same structure as table_data, but holds the AD variable indices for each entry in the table (or -1 if not registered)
+  std::vector<std::string> LUT_variable_names_; // same structure as table_data, but holds the variable name for each entry in the table (or "NULL" if not registered)
+  
   double memory_footprint_data = 0; /*!< \brief Memory footprint of the loaded table data. */
 
   /*! \brief
@@ -127,6 +133,16 @@ class CLookUpTable {
    */
   inline const su2double* GetDataP(const std::string& name_var, unsigned long i_level = 0) const {
     return table_data[i_level][GetIndexOfVar(name_var)];
+  }
+
+  /*!
+   * \brief Get the pointer to the column data of the table (density, temperature, source terms, ...).
+   * \returns Pointer to the column data.
+   */
+  inline su2double* GetDataP(const std::string& name_var, unsigned long i_level = 0) {
+    return const_cast<su2double*>(
+      static_cast<const CLookUpTable&>(*this).GetDataP(name_var, i_level)
+    );
   }
 
   /*!
@@ -442,5 +458,8 @@ class CLookUpTable {
    * Returns the table variable index which will always return zero when looked up.
    */
   unsigned long GetNullIndex() const { return idx_null; }
+
+  // register LUT in the AD tape.
+  std::pair<std::vector<int>, std::vector<std::string>> RegisterLUT(int &index);
 
 };

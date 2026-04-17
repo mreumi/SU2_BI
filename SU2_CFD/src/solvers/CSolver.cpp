@@ -27,6 +27,7 @@
 
 
 #include "../../include/solvers/CSolver.hpp"
+#include <ostream>
 #include "../../include/gradients/computeGradientsGreenGauss.hpp"
 #include "../../include/gradients/computeGradientsLeastSquares.hpp"
 #include "../../include/limiters/computeLimiters.hpp"

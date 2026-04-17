@@ -107,7 +107,9 @@ class CFluidFlamelet final : public CFluidModel {
     }
   }
  public:
-  CLookUpTable* GetLookUpTable() const { return look_up_table; }
+
+  CLookUpTable* GetLookUpTable() override { return look_up_table; }
+  const CLookUpTable* GetLookUpTable() const override { return look_up_table; }
 
   const std::vector<std::string>& GetControllingVariableNames() const {
     return controlling_variable_names;

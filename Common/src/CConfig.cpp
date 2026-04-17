@@ -2326,10 +2326,11 @@ void CConfig::SetConfig_Options() {
   /*DESCRIPTION: list of parameters for inverse problem*/
   addStringListOption("IP_PARAMETERS", nIP_Parameters, IP_Parameters);
   
-  /* DESCRIPTION:  Mesh input file */
+  /* DESCRIPTION:  Parameters for inverse problem */
   addStringOption("TARGET_VELOCITY_FILENAME", TargetVelocityData_Filename, string("target_velocity_data.dat"));
   addStringOption("TARGET_DISTANCE_FIELD_FILENAME", TargetDistanceField_Filename, string("target_distance_field.dat"));
-
+  addStringOption("LUT_VAR_FOR_FLAMESHAPE_DISC", LUT_Var_For_FlameShape_Disc, string("heat_release_rate")); // LUT variable used for flameshape discrepancy
+  addDoubleOption("FLAMESHAPE_DISC_THRESHOLD", threshold_FlameShape_Disc, 0.1); // Threshold applied to LUT table for the flame shape discrepancy
   /*!\par CONFIG_CATEGORY: Wind Gust \ingroup Config*/
   /*--- Options related to wind gust simulations ---*/
 

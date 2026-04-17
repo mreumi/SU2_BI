@@ -78,6 +78,7 @@ CFluidFlamelet::CFluidFlamelet(CConfig* config, su2double value_pressure_operati
       }
       look_up_table = new CLookUpTable(datadriven_fluid_options.datadriven_filenames[0], table_scalar_names[I_PROGVAR],
                                        table_scalar_names[I_ENTH]);
+      //std::cout << "Created new LUT in FluidFlamelet with address" << (void*)look_up_table << std::endl;
       break;
     default:
       if (rank == MASTER_NODE) {
@@ -277,8 +278,9 @@ void CFluidFlamelet::PreprocessLookUp(CConfig* config) {
 
 unsigned long CFluidFlamelet::EvaluateDataSet(const vector<su2double>& input_scalar, unsigned short lookup_type,
                                               vector<su2double>& output_refs) {
-  AD::StartPreacc();
-  for (auto iVar = 0u; iVar < input_scalar.size(); iVar++) AD::SetPreaccIn(input_scalar[iVar]);
+  // NEED TO BE DEACTIAVTED TO GET LOOKUP DERIVATIVES FOR INVERSE PROBLEM
+  // AD::StartPreacc();
+  // for (auto iVar = 0u; iVar < input_scalar.size(); iVar++) AD::SetPreaccIn(input_scalar[iVar]);
   
   su2double val_enth = input_scalar[I_ENTH];
   su2double val_prog = input_scalar[I_PROGVAR];
@@ -340,7 +342,8 @@ unsigned long CFluidFlamelet::EvaluateDataSet(const vector<su2double>& input_sca
     default:
       break;
   }
-  for (auto iVar = 0u; iVar < output_refs.size(); iVar++) AD::SetPreaccOut(output_refs[iVar]);
-  AD::EndPreacc();
+  // NEED TO BE DEACTIAVTED TO GET LOOKUP DERIVATIVES FOR INVERSE PROBLEM
+  // for (auto iVar = 0u; iVar < output_refs.size(); iVar++) AD::SetPreaccOut(output_refs[iVar]);
+  // AD::EndPreacc();
   return extrapolation;
 }

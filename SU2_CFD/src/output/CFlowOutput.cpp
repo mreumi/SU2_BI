@@ -2365,8 +2365,9 @@ static std::vector<su2double> GetLookupField(CConfig& config,
     minVal = minValGlobal;
     maxVal = maxValGlobal;
 
-    // Cutoff anything below 10% of the range to avoid spurious small values
-    su2double cutoff = minVal + 0.1 * (maxVal - minVal);
+    // Cutoff anything below 20% of the range to avoid spurious small values
+    su2double threshold = config.GetThreshold_FlameShape_Disc();
+    su2double cutoff = minVal + threshold * (maxVal - minVal);
     std::vector<su2double> LUT_field_cutoff(nPoint, su2double(0.0));
 
     for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
@@ -2492,7 +2493,8 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
   std::vector<su2double> q_field(nPoint, su2double(0.0));
 
   if (config.GetKind_Species_Model() == SPECIES_MODEL::FLAMELET) {
-      q_field = GetLookupField(const_cast<CConfig&>(config), &species_solver, &geometry, "heat_release_rate");
+      string LUT_var_name = config.GetLUT_Var_Name_For_FlameShape_Disc();
+      q_field = GetLookupField(const_cast<CConfig&>(config), &species_solver, &geometry, LUT_var_name);
     }
   else {
       // Unsupported species model for flame shape discrepancy computation. Skipping.

@@ -305,7 +305,9 @@ void CDiscAdjSolver::RegisterVariables(CGeometry *geometry, CConfig *config, boo
 void CDiscAdjSolver::RegisterModelParameters(CGeometry* geometry, CConfig* config, bool reset) {
   /*--- Register the variable for AD. ---*/
 
-  CustomValue_Indices = direct_solver->GetFluidModel()->RegisterCustomValues(config);
+  auto [indices, names] = direct_solver->GetFluidModel()->RegisterCustomValues(config);
+  CustomValue_Indices = indices;
+  CustomValue_Names   = names;
 }
 
 void CDiscAdjSolver::ComputeModelParametersGradient() {
@@ -335,8 +337,9 @@ void CDiscAdjSolver::ComputeModelParametersGradient() {
   // Write gradient to file and history (needs better location ?)
   ofstream GradientModelParameters("Gradient_Model_Discrepancy.dat", std::ios::out);
   for (size_t j = 0; j < ModelDiscrepancyGradient.size(); ++j) {
+      //GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << " " << CustomValue_Names[j] << '\n';
       GradientModelParameters << std::setprecision(12) << ModelDiscrepancyGradient[j] << '\n';
-      std::cout << "[INV-PROB] Model parameter " << j << " gradient: " << ModelDiscrepancyGradient[j] << std::endl;
+      // std::cout << "[INV-PROB] Model parameter " << j << " gradient: " << ModelDiscrepancyGradient[j] << std::endl;
   }
   GradientModelParameters.close();
 
