@@ -26,6 +26,7 @@
  */
 
 #include "../../include/solvers/CIncEulerSolver.hpp"
+#include <iostream>
 #include "../../../Common/include/toolboxes/printing_toolbox.hpp"
 #include "../../include/fluid/CConstantDensity.hpp"
 #include "../../include/fluid/CIncIdealGas.hpp"
@@ -2245,9 +2246,9 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
   unsigned short iDim;
   unsigned long iVertex, iPoint;
   unsigned long Point_Normal;
-  su2double *Flow_Dir, Flow_Dir_Mag, Vel_Mag, Area, P_total, P_domain, Vn;
+  su2double *PrimaryFlow_Dir, PrimaryFlow_Dir_Mag, *Secondary_Flow_Dir, Secondary_Flow_Dir_Mag, Vel_Mag, PrimaryVel_Mag, SecondaryVel_Mag, Area, P_total, P_domain, Vn;
   su2double *V_inlet, *V_domain;
-  su2double UnitFlowDir[MAXNDIM] = {0.0}, dV[MAXNDIM] = {0.0};
+  su2double UnitFlowDir[MAXNDIM] = {0.0}, UnitPrimaryFlowDir[MAXNDIM] = {0.0}, UnitSecondaryFlowDir[MAXNDIM] = {0.0}, dV[MAXNDIM] = {0.0};
   su2double Damping = config->GetInc_Inlet_Damping();
 
   const bool implicit = (config->GetKind_TimeIntScheme() == EULER_IMPLICIT);
@@ -2290,8 +2291,11 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
     /*--- Both types of inlets may use the prescribed flow direction.
      Ensure that the flow direction is a unit vector. ---*/
 
-    Flow_Dir = Inlet_FlowDir[val_marker][iVertex];
-    Flow_Dir_Mag = GeometryToolbox::Norm(nDim, Flow_Dir);
+    PrimaryFlow_Dir = Inlet_FlowDir[val_marker][iVertex];
+    PrimaryFlow_Dir_Mag = GeometryToolbox::Norm(nDim, PrimaryFlow_Dir);
+
+    Secondary_Flow_Dir = Secondary_Inlet_FlowDir[val_marker][iVertex];
+    Secondary_Flow_Dir_Mag = GeometryToolbox::Norm(nDim, Secondary_Flow_Dir);
 
     /*--- Store the unit flow direction vector.
      If requested, use the local boundary normal (negative),
@@ -2299,10 +2303,13 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
     if (config->GetInletUseNormal()) {
       for (iDim = 0; iDim < nDim; iDim++)
-        UnitFlowDir[iDim] = -Normal[iDim]/Area;
+        UnitPrimaryFlowDir[iDim]   = -Normal[iDim]/Area;
+        UnitSecondaryFlowDir[iDim] = -Normal[iDim]/Area;
     } else {
-      for (iDim = 0; iDim < nDim; iDim++)
-        UnitFlowDir[iDim] = Flow_Dir[iDim]/Flow_Dir_Mag;
+      for (iDim = 0; iDim < nDim; iDim++) {
+        UnitPrimaryFlowDir[iDim]   = PrimaryFlow_Dir[iDim]/PrimaryFlow_Dir_Mag;
+        UnitSecondaryFlowDir[iDim] = Secondary_Flow_Dir[iDim]/Secondary_Flow_Dir_Mag;
+      }
     }
 
     /*--- Retrieve solution at this boundary node. ---*/
@@ -2315,7 +2322,7 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
     /*--- The velocity is either prescribed or computed from total pressure. ---*/
 
-    su2double InletProfileFactor;
+    su2double InletProfileFactor, InletBlendingFactor;
 
     switch (Kind_Inlet) {
 
@@ -2325,11 +2332,16 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
         /*--- Retrieve the specified velocity and temperature for the inlet. ---*/
 
-        Vel_Mag  = Inlet_Ptotal[val_marker][iVertex]/config->GetVelocity_Ref();
-        //std::cout << "()()() val_marker: " << val_marker << " Marker_Tag: " << Marker_Tag << std::endl;
+        PrimaryVel_Mag      = Inlet_Ptotal[val_marker][iVertex]/config->GetVelocity_Ref();
+        SecondaryVel_Mag    = Secondary_Inlet_Ptotal[val_marker][iVertex]/config->GetVelocity_Ref();
+        InletBlendingFactor = config->GetInletProfileBlendingFactorRef(iInletMarker);
+
+        Vel_Mag = (1.0 - InletBlendingFactor)*PrimaryVel_Mag + InletBlendingFactor*SecondaryVel_Mag;
+        for (iDim = 0; iDim < nDim; iDim++)
+          UnitFlowDir[iDim] = (1.0 - InletBlendingFactor)*UnitPrimaryFlowDir[iDim] + InletBlendingFactor*UnitSecondaryFlowDir[iDim];
+        
         /*--- Apply correction factor to inlet velocity which can be registered as an input for inverse problems. ---*/
         InletProfileFactor = config->GetInletProfileFactorRef(iInletMarker);
-        // std::cout << "[IN-PROB]: InletProfileFactor: " << InletProfileFactor << std::endl;
 
         /*--- Store the velocity in the primitive variable vector. ---*/
 
@@ -2338,7 +2350,7 @@ void CIncEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
 
         /*--- Dirichlet condition for temperature (if energy is active) ---*/
 
-        V_inlet[prim_idx.Temperature()] = Inlet_Ttotal[val_marker][iVertex]/config->GetTemperature_Ref();
+        V_inlet[prim_idx.Temperature()] = ( (1.0 - InletBlendingFactor)*Inlet_Ttotal[val_marker][iVertex] + InletBlendingFactor*Secondary_Inlet_Ttotal[val_marker][iVertex])/config->GetTemperature_Ref();
 
         break;
 

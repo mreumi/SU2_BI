@@ -27,7 +27,11 @@
 
 
 #include "../../include/solvers/CSolver.hpp"
+#include <iostream>
+#include <optional>
 #include <ostream>
+#include <string>
+#include <vector>
 #include "../../include/gradients/computeGradientsGreenGauss.hpp"
 #include "../../include/gradients/computeGradientsLeastSquares.hpp"
 #include "../../include/limiters/computeLimiters.hpp"
@@ -3564,6 +3568,12 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
 
   auto profile_filename = config->GetInlet_FileName();
 
+  string secondary_profile_filename = "none";
+  bool secondary_file_specified = config->GetSecondary_Inlet_Profile_From_File();
+  if (secondary_file_specified) {
+    secondary_profile_filename = config->GetSecondary_Inlet_FileName();
+  }
+
   const auto turbulence = config->GetKind_Turb_Model() != TURB_MODEL::NONE;
   const unsigned short nVar_Turb = turbulence ? solver[MESH_0][TURB_SOL]->GetnVar() : 0;
 
@@ -3718,6 +3728,11 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
 
   CMarkerProfileReaderFVM profileReader(geometry[MESH_0], config, profile_filename, KIND_MARKER, nCol_InletFile, columnNames, columnValues);
 
+  std::optional<CMarkerProfileReaderFVM> secondaryProfileReader;
+  if (secondary_file_specified) {
+    secondaryProfileReader.emplace(geometry[MESH_0], config, secondary_profile_filename, KIND_MARKER, nCol_InletFile, columnNames, columnValues);
+  }
+
   /*--- Load data from the restart into correct containers. ---*/
 
   unsigned long Marker_Counter = 0;
@@ -3748,12 +3763,20 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
       /*--- Get data for this profile. ---*/
 
       const vector<passivedouble>& Inlet_Data = profileReader.GetDataForProfile(jMarker);
+
+      const std::vector<passivedouble>* Secondary_Inlet_Data = nullptr;
+      if (secondary_file_specified) {
+         Secondary_Inlet_Data = &secondaryProfileReader->GetDataForProfile(jMarker);
+      }
+      
       const auto nColumns = profileReader.GetNumberOfColumnsInProfile(jMarker);
       vector<su2double> Inlet_Data_Interpolated ((nCol_InletFile+nDim)*geometry[MESH_0]->nVertex[iMarker]);
 
       /*--- Define Inlet Values vectors before and after interpolation (if needed) ---*/
       vector<su2double> Inlet_Values(nCol_InletFile+nDim);
       vector<su2double> Inlet_Interpolated(nColumns);
+
+      vector<su2double> Secondary_Inlet_Values(nCol_InletFile+nDim);
 
       const auto nRows = profileReader.GetNumberOfRowsInProfile(jMarker);
 
@@ -3803,6 +3826,10 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
           break;
       }
 
+      if(secondary_file_specified && Interpolate){
+        SU2_MPI::Error("Interpolation of inlet profile is not currently supported when using a secondary inlet profile file.\n Set INLET_INTERPOLATION or SPECIFIED_SECONDARY_INLET_PROFILE to NONE.",CURRENT_FUNCTION );
+      }
+
       if (Interpolate){
         switch(config->GetKindInletInterpolationType()){
           case(INLET_INTERP_TYPE::VR_VTHETA):
@@ -3848,8 +3875,12 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
 
             if (dist < min_dist) {
               min_dist = dist;
-              for (auto iVar = 0ul; iVar < nColumns; iVar++)
+              for (auto iVar = 0ul; iVar < nColumns; iVar++) {
+                if (secondary_file_specified) {
+                  Secondary_Inlet_Values[iVar] = (*Secondary_Inlet_Data)[index+iVar];
+                }
                 Inlet_Values[iVar] = Inlet_Data[index+iVar];
+              }
             }
 
           }
@@ -3859,8 +3890,10 @@ void CSolver::LoadInletProfile(CGeometry **geometry,
           eventually add something more elaborate here for interpolation. ---*/
 
           if (min_dist < tolerance) {
-
             solver[MESH_0][KIND_SOLVER]->SetInletAtVertex(Inlet_Values.data(), iMarker, iVertex);
+            if (secondary_file_specified) {
+              solver[MESH_0][KIND_SOLVER]->SetSecondaryInletAtVertex(Secondary_Inlet_Values.data(), iMarker, iVertex);
+            }
 
           } else {
 

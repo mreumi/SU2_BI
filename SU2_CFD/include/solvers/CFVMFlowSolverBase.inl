@@ -125,6 +125,12 @@ void CFVMFlowSolverBase<V, R>::Allocate(const CConfig& config) {
 
   AllocVectorOfMatrices(nVertex, nDim, Inlet_FlowDir);
 
+  /*--- Store the value of the secondary inlet conditions ---*/
+
+  AllocVectorOfVectors(nVertex, Secondary_Inlet_Ptotal);
+  AllocVectorOfVectors(nVertex, Secondary_Inlet_Ttotal);
+  AllocVectorOfMatrices(nVertex, nDim, Secondary_Inlet_FlowDir);
+
   /*--- Force definition and coefficient arrays for all of the markers ---*/
 
   AllocVectorOfVectors(nVertex, CPressure);
@@ -724,6 +730,29 @@ void CFVMFlowSolverBase<V, R>::SetInletAtVertex(const su2double* val_inlet, unsi
     Inlet_FlowDir[iMarker][iVertex][iDim] = val_inlet[FlowDir_position + iDim];
   }
 }
+
+
+template <class V, ENUM_REGIME R>
+void CFVMFlowSolverBase<V, R>::SetSecondaryInletAtVertex(const su2double* val_inlet, unsigned short iMarker,
+                                                unsigned long iVertex) {
+  /*--- Alias positions within inlet file for readability ---*/
+
+  unsigned short T_position = nDim;
+  unsigned short P_position = nDim + 1;
+  unsigned short FlowDir_position = nDim + 2;
+
+  /*--- Note that it is not necessary anymore to use normalized normals for the inlet velocity ---*/
+
+
+  /*--- Store the values in our inlet data structures. ---*/
+
+  Secondary_Inlet_Ttotal[iMarker][iVertex] = val_inlet[T_position];
+  Secondary_Inlet_Ptotal[iMarker][iVertex] = val_inlet[P_position];
+  for (unsigned short iDim = 0; iDim < nDim; iDim++) {
+    Secondary_Inlet_FlowDir[iMarker][iVertex][iDim] = val_inlet[FlowDir_position + iDim];
+  }
+}
+
 
 template <class V, ENUM_REGIME R>
 su2double CFVMFlowSolverBase<V, R>::GetInletAtVertex(unsigned short iMarker, unsigned long iVertex,

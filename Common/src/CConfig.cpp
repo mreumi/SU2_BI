@@ -1596,8 +1596,12 @@ void CConfig::SetConfig_Options() {
   addBoolOption("SPECIFIED_INLET_PROFILE", Inlet_From_File, false);
   /*!\brief INLET_FILENAME \n DESCRIPTION: Input file for a specified inlet profile (w/ extension) \n DEFAULT: inlet.dat \ingroup Config*/
   addStringOption("INLET_FILENAME", Inlet_Filename, string("inlet.dat"));
-  //addDoubleOption("INLET_PROFILE_SCALE", InletVelocity_Factor, 1.0);
-  //addStringListOption("INLET_PROFILE_FACTORS", nInletProfileFactors, InletProfileFactors);
+  /*!\brief SPECIFIED_SECONDARY_INLET_PROFILE \n DESCRIPTION: Option to specify a secondary inlet profile that allows blending between primary and secondary profiles. \ingroup Config*/
+  addBoolOption("SPECIFIED_SECONDARY_INLET_PROFILE", Secondary_Inlet_From_File, false);
+  /*!\brief SECONDARY_INLET_FILENAME \n DESCRIPTION: Input file for a specified secondary inlet profile (w/ extension) \n DEFAULT: secondary_inlet.dat \ingroup Config*/
+  addStringOption("SECONDARY_INLET_FILENAME", Secondary_Inlet_Filename, string("secondary_inlet.dat"));
+  /*!\brief INLET_PROFILE_BLEND_FACTORS \n DESCRIPTION: Blend factors between primary and secondary inlet profiles at the inlet markers. List length must match number of inlet markers. \ingroup Config*/
+  addStringDoubleListOption("INLET_PROFILE_BLEND_FACTORS", nInletProfileBlendingFactors, Marker_InletProfileBlending, InletProfileBlendingFactor_Config);
   addStringDoubleListOption("INLET_PROFILE_FACTORS", nInletProfileFactors, Marker_InletProfile, InletProfileFactor_Config);
 
   /*!\brief INLET_MATCHING_TOLERANCE
@@ -5766,6 +5770,21 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
     InletProfileFactor_[iMarker] = value;
   }
 
+  //--- Set the inlet profile blending factors ---//
+  InletProfileBlendingFactor_.assign(nMarker_Inlet, 0.0);
+  InletProfileBlendingFactorIndex_.assign(nMarker_Inlet, -1);
+  InletProfileBlendingFactorRegistered_.assign(nMarker_Inlet, false);
+
+  for (unsigned short i = 0; i < nInletProfileBlendingFactors; ++i) {
+
+    const std::string& marker = Marker_InletProfileBlending[i];
+    su2double value = InletProfileBlendingFactor_Config[i];
+
+    unsigned short iMarker = GetInletMarkerIndex(marker);
+
+    InletProfileBlendingFactor_[iMarker] = value;
+  }
+
 }
 
 void CConfig::SetMarkers(SU2_COMPONENT val_software) {
@@ -9557,30 +9576,14 @@ unsigned short CConfig::GetInletMarkerIndex(const std::string& marker) const {
   return 0;
 }
 
+// Multiplicative factors
 su2double& CConfig::GetInletProfileFactorRef(unsigned short iMarker) {
   return InletProfileFactor_[iMarker];
-}
-
-void CConfig::SetInletProfileFactor(unsigned short iMarker, su2double val_factor) {
-  InletProfileFactor_[iMarker] = val_factor;
 }
 
 bool CConfig::IsInletProfileFactorRegistered(unsigned short iMarker) const {
   return InletProfileFactorRegistered_[iMarker];
 }
-
-// bool CConfig::IsInletVelFactorRegistered() const {
-//   return InletVelocity_Factor_Registered_;
-// }
-
-// int CConfig::GetInletVelFactorIndex() const {
-//   return InletVelocity_Factor_Index_;
-// }
-
-// void CConfig::SetInletVelFactorRegistered(int idx) const {
-//   InletVelocity_Factor_Index_ = idx;″
-//   InletVelocity_Factor_Registered_ = true;
-// }
 
 int CConfig::GetInletProfileFactorIndex(unsigned short iMarker) const {
   return InletProfileFactorIndex_[iMarker];
@@ -9589,6 +9592,24 @@ int CConfig::GetInletProfileFactorIndex(unsigned short iMarker) const {
 void CConfig::SetInletProfileFactorRegistered(unsigned short iMarker, int idx){
   InletProfileFactorIndex_[iMarker]       = idx;
   InletProfileFactorRegistered_[iMarker]  = true;
+}
+
+// Blending factors from primary to secondary profile
+su2double& CConfig::GetInletProfileBlendingFactorRef(unsigned short iMarker) {
+  return InletProfileBlendingFactor_[iMarker];
+}
+
+bool CConfig::IsInletProfileBlendingFactorRegistered(unsigned short iMarker) const {
+  return InletProfileBlendingFactorRegistered_[iMarker];
+}
+
+int CConfig::GetInletProfileBlendingFactorIndex(unsigned short iMarker) const {
+  return InletProfileBlendingFactorIndex_[iMarker];
+}
+
+void CConfig::SetInletProfileBlendingFactorRegistered(unsigned short iMarker, int idx){
+  InletProfileBlendingFactorIndex_[iMarker]       = idx;
+  InletProfileBlendingFactorRegistered_[iMarker]  = true;
 }
 
 su2double CConfig::GetIsothermal_Temperature(const std::string& val_marker) const {

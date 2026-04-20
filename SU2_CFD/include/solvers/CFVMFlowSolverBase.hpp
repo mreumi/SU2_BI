@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <vector>
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "CSolver.hpp"
@@ -173,6 +174,11 @@ class CFVMFlowSolverBase : public CSolver {
 
   vector<vector<su2double> > Inlet_Ptotal;      /*!< \brief Value of the Total P. */
   vector<vector<su2double> > Inlet_Ttotal;      /*!< \brief Value of the Total T. */
+
+  vector<vector<su2double>> Secondary_Inlet_Ptotal; /*!< \brief Value of the secondary Total P. */
+  vector<vector<su2double>> Secondary_Inlet_Ttotal; /*!< \brief Value of the secondary Total T. */
+  vector<su2activematrix> Secondary_Inlet_FlowDir; /*!< \brief Value of the secondary Flow Direction. */
+
   vector<su2activematrix> Inlet_FlowDir;        /*!< \brief Value of the Flow Direction. */
   vector<vector<su2double> > HeatFlux;          /*!< \brief Heat transfer coefficient for each boundary and vertex. */
   vector<vector<su2double> > HeatFluxTarget;    /*!< \brief Heat transfer coefficient for each boundary and vertex. */
@@ -1114,6 +1120,14 @@ class CFVMFlowSolverBase : public CSolver {
    * \param[in] iVertex - Vertex of the marker <i>iMarker</i> where the inlet is being set.
    */
   void SetInletAtVertex(const su2double* val_inlet, unsigned short iMarker, unsigned long iVertex) final;
+
+  /*!
+   * \brief Store of a set of provided inlet profile values at a vertex.
+   * \param[in] val_inlet - vector containing the inlet values for the current vertex.
+   * \param[in] iMarker - Index of the surface marker.
+   * \param[in] iVertex - Vertex of the marker <i>iMarker</i> where the inlet is being set.
+   */
+  void SetSecondaryInletAtVertex(const su2double* val_inlet, unsigned short iMarker, unsigned long iVertex) final;
 
   /*!
    * \brief Get the set of values imposed at an inlet.

@@ -2940,6 +2940,16 @@ public:
                                        unsigned short iMarker,
                                        unsigned long iVertex) { }
 
+                                         /*!
+   * \brief A virtual member
+   * \param[in] val_inlet - vector containing the inlet values for the current vertex.
+   * \param[in] iMarker - Surface marker where the coefficient is computed.
+   * \param[in] iVertex - Vertex of the marker <i>iMarker</i> where the inlet is being set.
+   */
+  inline virtual void SetSecondaryInletAtVertex(const su2double *val_inlet,
+                                       unsigned short iMarker,
+                                       unsigned long iVertex) { }
+
   /*!
    * \brief Get the set of values imposed at an inlet.
    * \param[in] iMarker - Index of the surface marker.

@@ -230,6 +230,12 @@ private:
 
   bool Inlet_From_File;         /*!< \brief True if the inlet profile is to be loaded from a file. */
   string Inlet_Filename;        /*!< \brief Filename specifying an inlet profile. */
+  
+  // A secondary inlet profile can be specified and a sweeping parameter can beused to interpolate between the primary and secondary inlet profiles. 
+  // This sweeping parameter can be inferred in an inverse problem setting.
+  bool Secondary_Inlet_From_File; /*!< \brief True if the secondary inlet profile is to be loaded from a file. */
+  string Secondary_Inlet_Filename; /*!< \brief Filename specifying a secondary inlet profile. */
+
   su2double Inlet_Matching_Tol; /*!< \brief Tolerance used when matching a point to a point from the inlet file. */
   string ActDisk_FileName;      /*!< \brief Filename specifying an actuator disk. */
 
@@ -296,6 +302,12 @@ private:
   *RelaxFactorAverage, *RelaxFactorFourier;  /*!< \brief Specified values for Giles BC. */
   su2double **Giles_FlowDir;                 /*!< \brief Specified flow direction vector (unit vector) for Giles BC. */
   su2double *Inlet_Ptotal;                   /*!< \brief Specified total pressures for inlet boundaries. */
+
+  // Implemented for inverse problems with inlet profiles as design variables, where the primary and secondary inlet profiles are blended together using a sweeping parameter. The total temperature and total pressure of the secondary inlet profile can be specified in the config file.
+  su2double *Secondary_Inlet_Ptotal;         /*!< \brief Specified secondary total pressures for inlet boundaries. */
+  su2double *Secondary_Inlet_Ttotal;         /*!< \brief Specified secondary total temperatures for inlet boundaries. */
+  su2double **Secondary_Inlet_FlowDir;       /*!< \brief Specified secondary flow velocity vectors for inlet boundaries. */
+
   su2double **Inlet_FlowDir;                 /*!< \brief Specified flow direction vector (unit vector) for inlet boundaries. */
   su2double *Inlet_Temperature;              /*!< \brief Specified temperatures for a supersonic inlet boundaries. */
   su2double *Inlet_Pressure;                 /*!< \brief Specified static pressures for supersonic inlet boundaries. */
@@ -1288,12 +1300,19 @@ private:
   std::vector<su2double> InletProfileFactor_;
   std::vector<int>       InletProfileFactorIndex_;
   std::vector<bool>      InletProfileFactorRegistered_;
-  
+
+  std::vector<su2double> InletProfileBlendingFactor_;
+  std::vector<int>       InletProfileBlendingFactorIndex_;
+  std::vector<bool>      InletProfileBlendingFactorRegistered_;
 
   /*--- Options for inverse problems---*/
   unsigned short nInletProfileFactors;  /*!< \brief Number of inlet profile factors. */
   string *Marker_InletProfile;          /*!< \brief Outlet flow markers. */
   su2double *InletProfileFactor_Config;        /*!< \brief Specified back pressures (static) for outlet boundaries. */
+
+  unsigned short nInletProfileBlendingFactors; /*!< \brief Number of parameters specified for inlet profile blending. */
+  string *Marker_InletProfileBlending;          /*!< \brief Markers for inlet profile blending. */
+  su2double *InletProfileBlendingFactor_Config;        /*!< \brief Specified back pressures (static) for outlet boundaries. */
 
   /*--- Additional flamelet solver options ---*/
   FluidFlamelet_ParsedOptions flamelet_ParsedOptions; /*!< \brief Additional flamelet solver options */
@@ -1758,14 +1777,17 @@ public:
   void SetIsothermalTempCorrectionRegistered(const std::string& marker, int idx) const;
 
   /* Helper functions for inverse problems, including a multiplicative correction to inflow velocity as input */
-  // su2double& Get_InletVelocityFactorRef() const;
   
   unsigned short GetInletMarkerIndex(const std::string& marker) const;
   su2double& GetInletProfileFactorRef(unsigned short iMarker);
-  void SetInletProfileFactor(unsigned short iMarker, su2double val_factor);
   bool IsInletProfileFactorRegistered(unsigned short iMarker) const;
   int  GetInletProfileFactorIndex(unsigned short iMarker) const;
   void SetInletProfileFactorRegistered(unsigned short iMarker, int idx);
+
+  su2double& GetInletProfileBlendingFactorRef(unsigned short iMarker);
+  bool IsInletProfileBlendingFactorRegistered(unsigned short iMarker) const;
+  int  GetInletProfileBlendingFactorIndex(unsigned short iMarker) const;
+  void SetInletProfileBlendingFactorRegistered(unsigned short iMarker, int idx);
 
   /*!
    * \brief Get the p-norm for heat-flux objective functions (adjoint problem).
@@ -5092,6 +5114,12 @@ public:
   bool GetInlet_Profile_From_File(void) const { return Inlet_From_File; }
 
   /*!
+   * \brief Check if the secondary inlet profile(s) are specified in an input file
+   * \return True if an input file is to be used for the secondary inlet profile(s)
+   */
+  bool GetSecondary_Inlet_Profile_From_File(void) const { return Secondary_Inlet_From_File; }
+
+  /*!
    * \brief Get name of the input file for the specified actuator disk.
    * \return Name of the input file for the specified actuator disk.
    */
@@ -5777,6 +5805,38 @@ public:
 
     return inletProfileFilename;
   }
+
+  /*!
+   * \brief Get name of the input file for the specified inlet profile.
+   * \return Name of the input file for the specified inlet profile.
+   */
+  string GetSecondary_Inlet_FileName(void) const {
+
+    /*--- we keep the original inlet profile filename  ---*/
+    string SecondaryInletProfileFilename = Secondary_Inlet_Filename;
+
+    /*--- strip the extension, only if it is .dat or .csv ---*/
+    PrintingToolbox::TrimExtension(".dat", SecondaryInletProfileFilename);
+    PrintingToolbox::TrimExtension(".csv", SecondaryInletProfileFilename);
+
+    /*--- Multizone problems require the number of the zone to be appended. ---*/
+    if (GetMultizone_Problem())
+      SecondaryInletProfileFilename = GetMultizone_FileName(SecondaryInletProfileFilename, GetiZone(), "");
+
+    /*--- Modify file name for an unsteady restart ---*/
+    if (GetTime_Domain() && GetRestart()) {
+      SecondaryInletProfileFilename = GetUnsteady_FileName(SecondaryInletProfileFilename, GetRestart_Iter(), "");
+    }
+    /*--- Add the correct file extension depending on the file format ---*/
+    string ext = ".dat";
+
+    SecondaryInletProfileFilename += ext;
+
+
+    return SecondaryInletProfileFilename;
+  }
+
+  
 
   /*!
    * \brief Get the Starting Iteration for the windowing approach
