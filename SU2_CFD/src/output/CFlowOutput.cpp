@@ -2331,13 +2331,14 @@ static su2double ComputeVelocityDiscrepancy(CSolver& flow_solver,
   return discrepancy;
 }
 
+// Extract a LUT scalar field on the mesh and suppress weak values below a configured threshold.
 static std::vector<su2double> GetLookupField(CConfig& config,
                                             CSolver* species_solver,
                                             const CGeometry* geometry,
                                             const std::string& lookup_name) {
     // Get index of lookup variable                 
     const auto& flamelet_config_options = config.GetFlameletParsedOptions();
-    unsigned int LU_idx = 0;
+    unsigned int LU_idx                 = 0;
     for (auto i_lookup = 0u; i_lookup < flamelet_config_options.n_lookups;++i_lookup) {
       if (flamelet_config_options.lookup_names[i_lookup] == lookup_name) {
         LU_idx = static_cast<int>(i_lookup);
@@ -2347,10 +2348,10 @@ static std::vector<su2double> GetLookupField(CConfig& config,
     
     // Extract field on mesh from LUT
     const auto Node_Species = species_solver->GetNodes();
-    auto nPoint = geometry->GetnPointDomain();
+    auto nPoint             = geometry->GetnPointDomain();
     std::vector<su2double> LUT_field(nPoint, su2double(0.0));
-    su2double minVal = std::numeric_limits<su2double>::max();
-    su2double maxVal = std::numeric_limits<su2double>::lowest();
+    su2double minVal       = std::numeric_limits<su2double>::max();
+    su2double maxVal       = std::numeric_limits<su2double>::lowest();
     su2double minValGlobal = std::numeric_limits<su2double>::max();
     su2double maxValGlobal = std::numeric_limits<su2double>::lowest();
 
@@ -2365,9 +2366,9 @@ static std::vector<su2double> GetLookupField(CConfig& config,
     minVal = minValGlobal;
     maxVal = maxValGlobal;
 
-    // Cutoff anything below 20% of the range to avoid spurious small values
+    // Cutoff anything below threshold of the range to avoid spurious small values
     su2double threshold = config.GetThreshold_FlameShape_Disc();
-    su2double cutoff = minVal + threshold * (maxVal - minVal);
+    su2double cutoff    = minVal + threshold * (maxVal - minVal);
     std::vector<su2double> LUT_field_cutoff(nPoint, su2double(0.0));
 
     for (unsigned long iPoint = 0; iPoint < nPoint; ++iPoint) {
@@ -2379,17 +2380,17 @@ static std::vector<su2double> GetLookupField(CConfig& config,
   }
 
 
+// Compute the squared global, q-weighted volume average of the target distance discrepancy.
 static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2double>& delta_on_mesh,
                                                         const std::vector<su2double>& q_on_mesh,
                                                         const CGeometry* geometry) {
-                                                        // Compute volume-averaged discrepancy (delta_on_mesh) weighted by q_on_mesh
   if (delta_on_mesh.empty()) {
     std::cout << " No target distance field on mesh; skipping flame distance discrepancy computation.\n";
     return su2double(0.0);
   }
 
   const int localN = geometry->GetnPointDomain();
-  const int n = std::min<int>(localN, static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
+  const int n      = std::min<int>(localN, static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
 
   su2double num_local = 0.0;
   su2double den_local = 0.0;
@@ -2397,9 +2398,9 @@ static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2doub
   for (int i = 0; i < n; ++i) {
     if (!geometry->nodes->GetDomain(i)) continue;
 
-    const su2double vol   = geometry->nodes->GetVolume(i);
-    const su2double delta = delta_on_mesh[i];
-    const su2double q     = q_on_mesh[i];
+    const su2double vol   = geometry->nodes->GetVolume(i); // local volume associated with node i
+    const su2double delta = delta_on_mesh[i];              // target distance field at node i
+    const su2double q     = q_on_mesh[i];                  // heat release (proxy) at node i
 
     num_local += delta * q * vol;
     den_local += q * vol;
@@ -2412,9 +2413,11 @@ static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2doub
   SU2_MPI::Allreduce(&den_local, &den_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
 
   if (den_global <= 0.0) return 0.0;
-  return num_global / den_global;
+  const su2double ratio = num_global / den_global;
+  return ratio * ratio;
 }
 
+// Build a coordinate-only point cloud from mesh nodes for target-to-mesh interpolation queries.
 static CMeshPointCloud BuildMeshQueryPointCloud(const CGeometry* geometry, int nDim)
 {
   const unsigned long nPoint = geometry->GetnPointDomain();
@@ -2430,6 +2433,7 @@ static CMeshPointCloud BuildMeshQueryPointCloud(const CGeometry* geometry, int n
   return CMeshPointCloud(coords, dummy_vals);
 }
 
+// Load (or reuse cached) target distance data and interpolate it onto local mesh nodes.
 static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
                                                         const CGeometry* geometry,
                                                         const CConfig* config,
@@ -2453,7 +2457,7 @@ static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
     else {
 
       // Read target point cloud (coords + 1 scalar column)
-      auto [coords, vals] = readTargetData(target_filename, nDim, /*nValCols=*/1);
+      auto [coords, vals]      = readTargetData(target_filename, nDim, /*nValCols=*/1);
       CMeshPointCloud target_cloud(coords, vals);
 
       // Query points = mesh nodes (coords only)
@@ -2477,6 +2481,7 @@ static std::vector<su2double> GetIPTargetDistanceOnMesh(CSolver* solver,
 
   //~~~~~~~~~~~~ Flame-shape discrepancy (integral distance field weighted by heat release) ~~~~~~~~~~~~//
 
+// Assemble the flame-shape discrepancy from target distances and a heat-release proxy field.
 static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
                                               CSolver& species_solver,
                                               const CGeometry& geometry,
@@ -2494,7 +2499,7 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
 
   if (config.GetKind_Species_Model() == SPECIES_MODEL::FLAMELET) {
       string LUT_var_name = config.GetLUT_Var_Name_For_FlameShape_Disc();
-      q_field = GetLookupField(const_cast<CConfig&>(config), &species_solver, &geometry, LUT_var_name);
+      q_field             = GetLookupField(const_cast<CConfig&>(config), &species_solver, &geometry, LUT_var_name);
     }
   else {
       // Unsupported species model for flame shape discrepancy computation. Skipping.
@@ -2504,7 +2509,7 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
 
   // Optional: output extracted fields for debugging
   bool plot_extracted_fields = true; // set to true to output extracted fields for debugging
-  const bool do_dump = plot_extracted_fields && (config.GetInnerIter() == 0 || (config.GetInnerIter() % 500 == 0));
+  const bool do_dump         = plot_extracted_fields && (config.GetInnerIter() == 0 || (config.GetInnerIter() % 500 == 0));
 
   if (do_dump) {
 
@@ -2594,13 +2599,13 @@ void CFlowOutput::SetInverseProblem(CSolver** solver_container, const CGeometry 
   CSolver* flow_solver    = solver_container[FLOW_SOL];
   CSolver* species_solver = solver_container[SPECIES_SOL]; // may be nullptr in non-species runs
 
-  //~~~~~~~~~~~~ Velocity-based model discrepancy ~~~~~~~~~~~~//
+  //~~~~~~~~~~~~ Velocity-based squared model discrepancy ~~~~~~~~~~~~//
   const su2double disc_vel = ComputeVelocityDiscrepancy(*flow_solver, *geometry, *config, nDim);
 
-  //~~~~~~~~~~~~ Flame distance-based model discrepancy ~~~~~~~~~~~~//
+  //~~~~~~~~~~~~ Flame distance-based squared model discrepancy ~~~~~~~~~~~~//
   const su2double disc_flame = ComputeFlameShapeDiscrepancy(*flow_solver, *species_solver, *geometry, *config, nDim);
 
-  //~~~~~~~~~~~~ Combine discrepancies ~~~~~~~~~~~~//
+  //~~~~~~~~~~~~ Combine squared discrepancies ~~~~~~~~~~~~//
   const su2double disc_total = disc_vel + disc_flame;
 
   flow_solver->SetTotal_ModelDiscrepancy(disc_total);
@@ -2611,7 +2616,7 @@ void CFlowOutput::SetInverseProblem(CSolver** solver_container, const CGeometry 
 
   // Write value to file (only once, on rank 0)
   if (SU2_MPI::GetRank() == 0) {
-      std::ofstream ModelDiscrepancyStream("Value_Model_Discrepancy.dat", std::ios::out);
+      std::ofstream ModelDiscrepancyStream("Value_Squared_Model_Discrepancy.dat", std::ios::out);
       ModelDiscrepancyStream << std::setprecision(12) << disc_total << '\n';
       ModelDiscrepancyStream.close();
   }
