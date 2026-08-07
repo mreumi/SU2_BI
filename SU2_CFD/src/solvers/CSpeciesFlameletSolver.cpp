@@ -26,6 +26,7 @@
  */
 
 #include "../../include/solvers/CSpeciesFlameletSolver.hpp"
+#include <iostream>
 
 #include "../../../Common/include/parallelization/omp_structure.hpp"
 #include "../../../Common/include/toolboxes/geometry_toolbox.hpp"
@@ -130,8 +131,12 @@ void CSpeciesFlameletSolver::Preprocessing(CGeometry* geometry, CSolver** solver
   /* --- Sum up some global counters over processes. --- */
   SU2_MPI::Reduce(&n_not_in_domain_local, &n_not_in_domain_global, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE,
                   SU2_MPI::GetComm());
-  if ((rank == MASTER_NODE) && (n_not_in_domain_global > 0))
-    cout << "Number of points outside manifold domain: " << n_not_in_domain_global << endl;
+  
+  
+  /*--- Expose the LUT miss count as a history output field (LUT_MISSES) so it can be
+   * monitored over iterations instead of only being visible per-point in VOLUME_OUTPUT.
+   * n_not_in_domain_global is only valid on MASTER_NODE after SU2_MPI::Reduce above. ---*/
+  if (rank == MASTER_NODE) config->SetLUT_Misses(n_not_in_domain_global);
 
   /*--- Compute preferential diffusion scalar gradients. ---*/
   if (flamelet_config_options.preferential_diffusion) {
@@ -156,7 +161,7 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
 
   if ((!restart) && ExtIter == 0) {
     if (rank == MASTER_NODE) {
-      cout << "Initializing progress variable and total enthalpy (using temperature)" << endl;
+      cout << "Initializing progress variable and total enthalpy" << endl;
     }
 
     su2double flame_offset[3] = {0, 0, 0}, flame_normal[3] = {0, 0, 0}, flame_thickness = 0, flame_burnt_thickness = 0,
@@ -176,7 +181,7 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
     }
 
     const su2double temp_inlet = config->GetInc_Temperature_Init();
-    su2double enth_inlet = config->GetSpecies_Init()[I_ENTH];
+    const su2double enth_inlet = config->GetSpecies_Init()[I_ENTH];
 
     su2double prog_burnt = 0, prog_unburnt, point_loc;
     su2double scalar_init[MAXNVAR];
@@ -205,8 +210,8 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
 
     CFluidModel* fluid_model_local;
 
-    unsigned long n_not_iterated_local = 0, n_not_in_domain_local = 0, n_points_unburnt_local = 0,
-                  n_points_burnt_local = 0, n_points_flame_local = 0, n_not_iterated_global, n_not_in_domain_global,
+    unsigned long n_not_in_domain_local = 0, n_points_unburnt_local = 0,
+                  n_points_burnt_local = 0, n_points_flame_local = 0, n_not_in_domain_global,
                   n_points_burnt_global, n_points_flame_global, n_points_unburnt_global;
 
     for (unsigned long i_mesh = 0; i_mesh <= config->GetnMGLevels(); i_mesh++) {
@@ -214,8 +219,9 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
 
       for (auto iVar = 0u; iVar < nVar; iVar++) scalar_init[iVar] = config->GetSpecies_Init()[iVar];
 
-      /*--- Set enthalpy based on initial temperature and scalars. ---*/
-      n_not_iterated_local += GetEnthFromTemp(fluid_model_local, temp_inlet, config->GetSpecies_Init(), &enth_inlet);
+      /*--- Enthalpy is taken directly from SPECIES_INIT -- no re-derivation from temperature,
+       * which used to rely on a Newton iteration (GetEnthFromTemp) that could silently fail
+       * to converge and return a wildly wrong value. ---*/
       scalar_init[I_ENTH] = enth_inlet;
 
       prog_unburnt = config->GetSpecies_Init()[I_PROGVAR];
@@ -286,8 +292,6 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
     /* --- Sum up some global counters over processes. --- */
     SU2_MPI::Reduce(&n_not_in_domain_local, &n_not_in_domain_global, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE,
                     SU2_MPI::GetComm());
-    SU2_MPI::Reduce(&n_not_iterated_local, &n_not_iterated_global, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE,
-                    SU2_MPI::GetComm());
     SU2_MPI::Reduce(&n_points_unburnt_local, &n_points_unburnt_global, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE,
                     SU2_MPI::GetComm());
     SU2_MPI::Reduce(&n_points_burnt_local, &n_points_burnt_global, 1, MPI_UNSIGNED_LONG, MPI_SUM, MASTER_NODE,
@@ -306,10 +310,6 @@ void CSpeciesFlameletSolver::SetInitialCondition(CGeometry** geometry, CSolver**
       if (n_not_in_domain_global > 0)
         cout << " Initial condition: Number of points outside of table domain: " << n_not_in_domain_global << " !!!"
              << endl;
-
-      if (n_not_iterated_global > 0)
-        cout << " Initial condition: Number of points in which enthalpy could not be iterated: "
-             << n_not_iterated_global << " !!!" << endl;
     }
   }
 
@@ -398,22 +398,13 @@ void CSpeciesFlameletSolver::Source_Residual(CGeometry* geometry, CSolver** solv
 
 void CSpeciesFlameletSolver::BC_Inlet(CGeometry* geometry, CSolver** solver_container, CNumerics* conv_numerics,
                                       CNumerics* visc_numerics, CConfig* config, unsigned short val_marker) {
-  string Marker_Tag = config->GetMarker_All_TagBound(val_marker);
-
-  su2double temp_inlet = config->GetInletTtotal(Marker_Tag);
-
-  /*--- We compute inlet enthalpy from the temperature and progress variable. ---*/
-  su2double enth_inlet;
-  GetEnthFromTemp(solver_container[FLOW_SOL]->GetFluidModel(), temp_inlet, config->GetInlet_SpeciesVal(Marker_Tag),
-                  &enth_inlet);
-
-  SU2_OMP_FOR_STAT(OMP_MIN_SIZE)
-  for (auto iVertex = 0u; iVertex < geometry->nVertex[val_marker]; iVertex++) {
-    Inlet_SpeciesVars[val_marker][iVertex][I_ENTH] = enth_inlet;
-  }
-  END_SU2_OMP_FOR
-
-  /*--- Call the general inlet boundary condition implementation. ---*/
+  /*--- Progress variable and enthalpy are already set correctly in Inlet_SpeciesVars, from
+   * MARKER_INLET_SPECIES (CSpeciesSolver::SetUniformInlet) or an inlet profile file
+   * (CSpeciesSolver::SetInletAtVertex), whichever is active -- no per-iteration override
+   * needed here. This used to unconditionally overwrite the enthalpy component every
+   * iteration (first via a temperature-driven Newton iteration, later via a direct config
+   * read), which silently discarded a profile file's per-vertex enthalpy column in both
+   * cases. Progress variable was never touched by this override and was always correct. ---*/
   CSpeciesSolver::BC_Inlet(geometry, solver_container, conv_numerics, visc_numerics, config, val_marker);
 }
 
@@ -763,7 +754,8 @@ unsigned long CSpeciesFlameletSolver::GetEnthFromTemp(CFluidModel* fluid_model, 
 
   su2double val_scalars[MAXNVAR];
   for (auto iVar = 0u; iVar < nVar; iVar++) val_scalars[iVar] = scalar_solution[iVar];
-
+  // std::cout << "Iterating to get enthalpy from temperature: T_target = " << val_temp << ", initial enth = " << enth_iter
+  //           << ", initial PV = " << scalar_solution[I_PROGVAR] << std::endl;
   while ((abs(delta_temp_iter) > delta_temp_final) && (counter++ < counter_limit)) {
     /*--- Add all quantities and their names to the look up vectors. ---*/
     val_scalars[I_ENTH] = enth_iter;
@@ -778,6 +770,8 @@ unsigned long CSpeciesFlameletSolver::GetEnthFromTemp(CFluidModel* fluid_model, 
 
     enth_iter += delta_enth;
   }
+  std::cout << "Final iterated enthalpy = " << enth_iter << ", final temperature = " << fluid_model->GetTemperature()
+             << ", iterations = " << counter << std::endl;
 
   *val_enth = enth_iter;
 

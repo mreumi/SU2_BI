@@ -2076,9 +2076,10 @@ static std::vector<su2double> InterpolateScalarTargetToMeshNodes(const CMeshPoin
 
 void CFlowOutput::AddInverseProblemOutput(){
 
-  AddHistoryOutput("INVERSE_PROBLEM_TOTAL_MODEL_DISCREPANCY", "Mdl_Disc_Tot", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Total model discrepancy for inverse problem", HistoryFieldType::COEFFICIENT);
-  AddHistoryOutput("INVERSE_PROBLEM_VELOCITY_MODEL_DISCREPANCY", "Mdl_Disc_Vel", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Model discrepancy in terms of velocity target for inverse problem", HistoryFieldType::COEFFICIENT);
-  AddHistoryOutput("INVERSE_PROBLEM_FLAME_MODEL_DISCREPANCY", "Mdl_Disc_Flame", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Model discrepancy in terms of flame target location for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("TOTAL_DISCREPANCY_L2_NORM", "TOT_DISC_L2", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Total model discrepancy L2 norm for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("VELOCITY_DISCREPANCY_L2_NORM", "VEL_DISC_L2", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Velocity-based discrepancy L2 norm for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("FLAME_SHAPE_DISCREPANCY_L2_NORM", "FLAME_DISC_L2", ScreenOutputFormat::FIXED, "INVERSE_PROBLEM", "Flame-shape discrepancy L2 norm for inverse problem", HistoryFieldType::COEFFICIENT);
+  AddHistoryOutput("LUT_MISSES", "Lut_Misses", ScreenOutputFormat::INTEGER, "INVERSE_PROBLEM", "Number of points outside the LUT manifold domain");
 
 }
 
@@ -2380,6 +2381,80 @@ static std::vector<su2double> GetLookupField(CConfig& config,
   }
 
 
+// Compute the L2-norm of the flame shape discrepancy vector d^Td, which is defnied as d = q/q_mean * delta, where delta is the target distance field and q is the heat release (proxy) field.
+// This involves a volume-weighted average. See notes 'model_discrepancy.md' for details.
+
+static su2double ComputeFlameShapeDiscrepancyL2(const std::vector<su2double>& delta_on_mesh,
+                                                 const std::vector<su2double>& q_on_mesh,
+                                                 const CGeometry* geometry,
+                                                 const CConfig* config) {
+  if (delta_on_mesh.empty()) {
+    std::cout << " No target distance field on mesh; skipping flame distance discrepancy computation.\n";
+    return su2double(0.0);
+  }
+
+  const su2double pixel_area = config->GetPixel_size_FlameShape_Disc();
+  if (pixel_area <= 0.0) {
+    if (SU2_MPI::GetRank() == 0) {
+      std::cout << " FLAMESHAPE_DISC_PIXEL_SIZE must be > 0. Returning zero flame-shape discrepancy.\n";
+    }
+    return su2double(0.0);
+  }
+
+  const bool axisymmetric = config->GetAxisymmetric();
+
+  const int localN = geometry->GetnPointDomain();
+  const int n      = std::min<int>(localN, static_cast<int>(std::min(delta_on_mesh.size(), q_on_mesh.size())));
+
+  // Evaluate weighted sums for q_mean and d^T d on the CFD grid.
+  su2double q_w_local       = 0.0;
+  su2double w_local         = 0.0;
+  su2double q_delta2_w_local = 0.0;
+
+  for (int i = 0; i < n; ++i) {
+    if (!geometry->nodes->GetDomain(i)) continue;
+
+    const su2double vol   = geometry->nodes->GetVolume(i);
+    const su2double delta = delta_on_mesh[i];
+    const su2double q     = q_on_mesh[i];
+    su2double weight      = vol;
+
+    if (axisymmetric) {
+      const su2double r = std::fabs(geometry->nodes->GetCoord(i, 1));
+      if (r <= std::numeric_limits<su2double>::epsilon()) continue;
+      weight = vol / (2.0 * PI_NUMBER * r);
+    }
+
+    if (weight <= 0.0) continue;
+
+    const su2double q_delta = q * delta;
+    q_w_local        += q * weight;
+    w_local          += weight;
+    q_delta2_w_local += q_delta * q_delta * weight;
+  }
+
+  su2double q_w_global        = 0.0;
+  su2double w_global          = 0.0;
+  su2double q_delta2_w_global = 0.0;
+
+  // Reduce across all MPI ranks to get global sums
+  SU2_MPI::Allreduce(&q_w_local, &q_w_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  SU2_MPI::Allreduce(&w_local, &w_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+  SU2_MPI::Allreduce(&q_delta2_w_local, &q_delta2_w_global, 1, MPI_DOUBLE, MPI_SUM, SU2_MPI::GetComm());
+
+  if (w_global <= 0.0) return su2double(0.0);
+
+  const su2double q_mean = q_w_global / w_global;
+  if (std::fabs(q_mean) <= std::numeric_limits<su2double>::epsilon()) {
+    if (SU2_MPI::GetRank() == 0) {
+      std::cout << " Mean flame-shape weighting field is zero. Returning zero flame-shape discrepancy.\n";
+    }
+    return su2double(0.0);
+  }
+
+  return q_delta2_w_global / (q_mean * q_mean * pixel_area);
+}
+
 // Compute the squared global, q-weighted volume average of the target distance discrepancy.
 static su2double ComputeFlameDistanceDiscrepancyVolume(const std::vector<su2double>& delta_on_mesh,
                                                         const std::vector<su2double>& q_on_mesh,
@@ -2589,8 +2664,11 @@ static su2double ComputeFlameShapeDiscrepancy(CSolver& flow_solver,
   // End of optional dump
   
   // C) compute volume-averaged discrepancy
-  disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_field, &geometry);
-  
+  //disc_flame = ComputeFlameDistanceDiscrepancyVolume(delta_on_mesh, q_field, &geometry);
+
+  // C) compute L2-norm of discrepancy vector d^Td, where d = q/q_mean * delta
+  disc_flame = ComputeFlameShapeDiscrepancyL2(delta_on_mesh, q_field, &geometry, &config);
+
   return disc_flame;
 }
 
@@ -2610,13 +2688,14 @@ void CFlowOutput::SetInverseProblem(CSolver** solver_container, const CGeometry 
 
   flow_solver->SetTotal_ModelDiscrepancy(disc_total);
 
-  SetHistoryOutputValue("INVERSE_PROBLEM_VELOCITY_MODEL_DISCREPANCY", disc_vel);
-  SetHistoryOutputValue("INVERSE_PROBLEM_FLAME_MODEL_DISCREPANCY", disc_flame);
-  SetHistoryOutputValue("INVERSE_PROBLEM_TOTAL_MODEL_DISCREPANCY", disc_total);
+  SetHistoryOutputValue("VELOCITY_DISCREPANCY_L2_NORM", disc_vel);
+  SetHistoryOutputValue("FLAME_SHAPE_DISCREPANCY_L2_NORM", disc_flame);
+  SetHistoryOutputValue("TOTAL_DISCREPANCY_L2_NORM", disc_total);
+  SetHistoryOutputValue("LUT_MISSES", config->GetLUT_Misses());
 
   // Write value to file (only once, on rank 0)
   if (SU2_MPI::GetRank() == 0) {
-      std::ofstream ModelDiscrepancyStream("Value_Squared_Model_Discrepancy.dat", std::ios::out);
+      std::ofstream ModelDiscrepancyStream("inverse_problem_total_discrepancy_l2_norm.dat", std::ios::out);
       ModelDiscrepancyStream << std::setprecision(12) << disc_total << '\n';
       ModelDiscrepancyStream.close();
   }

@@ -239,10 +239,11 @@ private:
   su2double Inlet_Matching_Tol; /*!< \brief Tolerance used when matching a point to a point from the inlet file. */
   string ActDisk_FileName;      /*!< \brief Filename specifying an actuator disk. */
 
-  string TargetVelocityData_Filename;  /*!< \brief Filename specifying an target data file. */
-  string TargetDistanceField_Filename; /*!< \brief Filename specifying a target distance field file e.g. for flame location. */
-  string LUT_Var_For_FlameShape_Disc;  /*!< \brief LUT variable used for flameshape discrepancy. */
-  su2double threshold_FlameShape_Disc; /*!< \brief Threshold used for evaluating the flame shape discrepancy. */
+  string TargetVelocityData_Filename;   /*!< \brief Filename specifying an target data file. */
+  string TargetDistanceField_Filename;  /*!< \brief Filename specifying a target distance field file e.g. for flame location. */
+  string LUT_Var_For_FlameShape_Disc;   /*!< \brief LUT variable used for flameshape discrepancy. */
+  su2double threshold_FlameShape_Disc;  /*!< \brief Threshold used for evaluating the flame shape discrepancy. */
+  su2double pixel_size_FlameShape_Disc; /*!< \brief Pixel size used for evaluating the flame shape discrepancy. */
 
   string *Marker_Euler,           /*!< \brief Euler wall markers. */
   *Marker_FarField,               /*!< \brief Far field markers. */
@@ -1088,6 +1089,7 @@ private:
   array<su2double,2> StressPenaltyParam = {{1.0, 20.0}}; /*!< \brief Allowed stress and KS aggregation exponent. */
   unsigned long Nonphys_Points,     /*!< \brief Current number of non-physical points in the solution. */
   Nonphys_Reconstr;                 /*!< \brief Current number of non-physical reconstructions for 2nd-order upwinding. */
+  unsigned long LUT_Misses = 0;     /*!< \brief Current number of points outside the LUT manifold domain (flamelet lookups). */
   su2double ParMETIS_tolerance;     /*!< \brief Load balancing tolerance for ParMETIS. */
   long ParMETIS_pointWgt;           /*!< \brief Load balancing weight given to points. */
   long ParMETIS_edgeWgt;            /*!< \brief Load balancing weight given to edges. */
@@ -5871,6 +5873,8 @@ public:
   
   su2double GetThreshold_FlameShape_Disc(void) const { return threshold_FlameShape_Disc; };  /*!< \brief Threshold used for evaluating the flame shape discrepancy. */
 
+  su2double GetPixel_size_FlameShape_Disc(void) const { return pixel_size_FlameShape_Disc; };  /*!< \brief Pixel size used for evaluating the flame shape discrepancy. */
+
   /*!
    * \brief Add any numbers necessary to the filename (iteration number, zone ID ...)
    * \param[in] filename - the base filename.
@@ -9071,6 +9075,18 @@ public:
    * \return Current number of non-physical points.
    */
   unsigned long GetNonphysical_Points(void) const { return Nonphys_Points; }
+
+  /*!
+   * \brief Set the current number of points outside the LUT manifold domain (flamelet lookups).
+   * \param[in] val_lut_misses - current number of points outside the LUT domain.
+   */
+  void SetLUT_Misses(unsigned long val_lut_misses) { LUT_Misses = val_lut_misses; }
+
+  /*!
+   * \brief Get the current number of points outside the LUT manifold domain (flamelet lookups).
+   * \return Current number of points outside the LUT domain.
+   */
+  unsigned long GetLUT_Misses(void) const { return LUT_Misses; }
 
   /*!
    * \brief Set the current number of non-physical reconstructions for 2nd-order upwinding.
